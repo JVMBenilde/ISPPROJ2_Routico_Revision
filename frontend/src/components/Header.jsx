@@ -44,7 +44,7 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-gray-900 shadow-lg border-b border-gray-800 w-full">
+    <header className="bg-gray-900 shadow-lg border-b border-gray-800 w-full sticky top-0 z-50">
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           <div className="flex items-center">
@@ -68,7 +68,7 @@ const Header = () => {
           {!user ? (
             <>
               <nav className="hidden md:flex space-x-8">
-                <Link to="/" className="text-gray-300 hover:text-white transition-colors">Home</Link>
+                <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-gray-300 hover:text-white transition-colors">Home</Link>
                 <a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a>
                 <a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a>
                 <a href="#about" className="text-gray-300 hover:text-white transition-colors">About</a>

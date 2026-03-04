@@ -474,24 +474,24 @@ const BusinessOwnerDashboard = () => {
                   Quick Actions
                 </h3>
                 <div className="space-y-3">
-                  <Link
-                    to="/orders/create"
+                  <button
+                    onClick={() => setActiveTab('orders')}
                     className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                     Create New Order
-                  </Link>
-                  <Link
-                    to="/drivers/add"
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('drivers')}
                     className="w-full flex items-center justify-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600 transition-colors"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     Add Driver
-                  </Link>
+                  </button>
                   <Link
                     to="/routes/optimize"
                     className="w-full flex items-center justify-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600 transition-colors"
@@ -501,15 +501,15 @@ const BusinessOwnerDashboard = () => {
                     </svg>
                     Optimize Routes
                   </Link>
-                  <Link
-                    to="/analytics"
+                  <button
+                    onClick={() => setActiveTab('charts')}
                     className="w-full flex items-center justify-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600 transition-colors"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                     View Analytics
-                  </Link>
+                  </button>
                 </div>
               </div>
             </div>

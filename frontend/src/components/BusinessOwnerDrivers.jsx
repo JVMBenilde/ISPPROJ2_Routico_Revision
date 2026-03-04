@@ -8,6 +8,7 @@ const BusinessOwnerDrivers = () => {
   const [error, setError] = useState(null);
   const [showAddDriver, setShowAddDriver] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [statusDropdownId, setStatusDropdownId] = useState(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -25,38 +26,12 @@ const BusinessOwnerDrivers = () => {
   const fetchDrivers = async () => {
     setLoading(true);
     try {
-      // Try to load from localStorage first
+      // Load drivers from localStorage
       const savedDrivers = localStorage.getItem('routicoDrivers');
       if (savedDrivers) {
         setDrivers(JSON.parse(savedDrivers));
       } else {
-        // Use sample data as fallback
-        const sampleDrivers = [
-          {
-            id: 1,
-            firstName: 'Juan',
-            lastName: 'Dela Cruz',
-            email: 'juan@example.com',
-            phone: '0917-123-4567',
-            licenseNumber: 'DL-2024-001',
-            licenseExpiry: '2026-12-31',
-            status: 'Active',
-            ridesCompleted: 148
-          },
-          {
-            id: 2,
-            firstName: 'Maria',
-            lastName: 'Santos',
-            email: 'maria@example.com',
-            phone: '0917-234-5678',
-            licenseNumber: 'DL-2024-002',
-            licenseExpiry: '2027-06-30',
-            status: 'Active',
-            ridesCompleted: 92
-          }
-        ];
-        setDrivers(sampleDrivers);
-        localStorage.setItem('routicoDrivers', JSON.stringify(sampleDrivers));
+        setDrivers([]);
       }
       setError(null);
     } catch (err) {
@@ -180,6 +155,24 @@ const BusinessOwnerDrivers = () => {
       
       console.log('Removed driver:', id);
     }
+  };
+
+  const statusOptions = ['Active', 'On Leave', 'Sick Leave', 'Inactive'];
+
+  const statusColors = {
+    'Active': 'bg-green-900 text-green-200',
+    'On Leave': 'bg-yellow-900 text-yellow-200',
+    'Sick Leave': 'bg-orange-900 text-orange-200',
+    'Inactive': 'bg-gray-700 text-gray-300'
+  };
+
+  const handleStatusChange = (driverId, newStatus) => {
+    const updatedDrivers = drivers.map(driver =>
+      driver.id === driverId ? { ...driver, status: newStatus } : driver
+    );
+    setDrivers(updatedDrivers);
+    saveDrivers(updatedDrivers);
+    setStatusDropdownId(null);
   };
 
   return (
@@ -338,12 +331,31 @@ const BusinessOwnerDrivers = () => {
                     <p className="text-sm text-gray-500 mt-2">{driver.phone}</p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                    driver.status === 'Active' ? 'bg-green-900 text-green-200' : 'bg-gray-700 text-gray-300'
-                  }`}>
+                <div className="relative flex items-center space-x-2">
+                  <button
+                    onClick={() => setStatusDropdownId(statusDropdownId === driver.id ? null : driver.id)}
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${statusColors[driver.status] || 'bg-gray-700 text-gray-300'}`}
+                  >
                     {driver.status}
-                  </span>
+                    <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {statusDropdownId === driver.id && (
+                    <div className="absolute right-0 top-8 z-10 bg-gray-700 border border-gray-600 rounded-lg shadow-lg py-1 min-w-[140px]">
+                      {statusOptions.map((status) => (
+                        <button
+                          key={status}
+                          onClick={() => handleStatusChange(driver.id, status)}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-600 transition-colors ${
+                            driver.status === status ? 'text-blue-400 font-medium' : 'text-gray-200'
+                          }`}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

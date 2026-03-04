@@ -66,7 +66,7 @@ const BusinessOwnerDashboard = () => {
       window.removeEventListener('logoUpdated', handleLogoUpdate);
       window.removeEventListener('driversUpdated', handleDriversUpdate);
     };
-  }, []);
+  }, [user]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -102,15 +102,24 @@ const BusinessOwnerDashboard = () => {
 
       setStats(statsData);
 
-      // Fetch recent orders
-      const ordersResponse = await fetch('http://localhost:3001/api/auth/recent-orders');
+      // Fetch recent orders from the real orders API
+      if (user) {
+        const token = await user.getIdToken();
+        const ordersResponse = await fetch('http://localhost:3001/api/orders', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-      if (ordersResponse.ok) {
-        const ordersData = await ordersResponse.json();
-        setRecentOrders(ordersData);
-      } else {
-        // If no orders endpoint exists yet, use empty array
-        setRecentOrders([]);
+        if (ordersResponse.ok) {
+          const ordersData = await ordersResponse.json();
+          // Update total orders stat from real data
+          statsData.totalOrders = ordersData.length;
+          statsData.completedDeliveries = ordersData.filter(o => o.order_status === 'completed').length;
+          setStats({ ...statsData });
+          // Show the 5 most recent orders
+          setRecentOrders(ordersData.slice(0, 5));
+        } else {
+          setRecentOrders([]);
+        }
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -399,12 +408,12 @@ const BusinessOwnerDashboard = () => {
                   <h3 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors duration-300">
                     Recent Orders
                   </h3>
-                  <Link
-                    to="/orders"
-                    className="group/link text-sm font-medium text-blue-400 hover:text-blue-300 transition-all duration-300 transform hover:scale-105"
+                  <button
+                    onClick={() => setActiveTab('orders')}
+                    className="group/link text-sm font-medium text-blue-400 hover:text-blue-300 transition-all duration-300 transform hover:scale-105 cursor-pointer"
                   >
                     <span className="group-hover/link:animate-pulse">View all</span>
-                  </Link>
+                  </button>
                 </div>
                 {loading ? (
                   <div className="space-y-4">
@@ -421,32 +430,32 @@ const BusinessOwnerDashboard = () => {
                   </div>
                 ) : recentOrders.length > 0 ? (
                   <div className="flow-root">
-                    <ul className="-my-5 divide-y divide-gray-200">
-                      {recentOrders.map((order) => (
-                        <li key={order.id} className="py-4">
+                    <ul className="-my-5 divide-y divide-gray-700">
+                      {recentOrders.map((order, index) => (
+                        <li key={order.order_id} className="py-4">
                           <div className="flex items-center space-x-4">
                             <div className="flex-shrink-0">
                               <div className="h-8 w-8 bg-gray-700 rounded-full flex items-center justify-center">
                                 <span className="text-sm font-medium text-white">
-                                  {order.id}
+                                  {index + 1}
                                 </span>
                               </div>
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white truncate">
-                                {order.customer}
+                                {order.customer_name || 'Customer'}
                               </p>
                               <p className="text-sm text-gray-400 truncate">
-                                {order.destination} • {order.driver}
+                                {order.drop_off_location}
                               </p>
                             </div>
                             <div className="flex-shrink-0">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                order.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                                order.status === 'In Transit' ? 'bg-blue-100 text-blue-800' :
-                                'bg-yellow-100 text-yellow-800'
+                                order.order_status === 'completed' ? 'bg-green-900/50 text-green-400' :
+                                order.order_status === 'in_transit' ? 'bg-blue-900/50 text-blue-400' :
+                                'bg-yellow-900/50 text-yellow-400'
                               }`}>
-                                {order.status}
+                                {order.order_status}
                               </span>
                             </div>
                           </div>

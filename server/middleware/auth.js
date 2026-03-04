@@ -33,6 +33,7 @@ const verifyFirebaseToken = async (req, res, next) => {
       next();
     } catch (firebaseError) {
       console.error('Token verification error - both JWT and Firebase failed');
+      console.error('Firebase error:', firebaseError.code, firebaseError.message);
       return res.status(401).json({ error: 'Invalid token' });
     }
   } catch (error) {

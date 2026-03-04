@@ -81,7 +81,8 @@ router.post('/', requireAuth, async (req, res) => {
       scheduledDate,
       scheduledTime,
       distance,
-      estimatedTime
+      estimatedTime,
+      deliveryFee
     } = req.body;
 
     console.log('Received order data:', req.body);
@@ -135,17 +136,19 @@ router.post('/', requireAuth, async (req, res) => {
         customer_id,
         pickup_location,
         drop_off_location,
+        delivery_fee,
         weight,
         size,
         scheduled_delivery_time,
         order_status,
         order_created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`,
       [
         ownerId,
         customerId,
         pickupAddress,
         deliveryAddress,
+        parseFloat(deliveryFee) || null,
         parseFloat(itemWeight) || 0,
         size || null,
         scheduledDeliveryTime
@@ -217,7 +220,8 @@ router.put('/:orderId', requireAuth, async (req, res) => {
       drop_off_location,
       weight,
       size,
-      scheduled_delivery_time
+      scheduled_delivery_time,
+      delivery_fee
     } = req.body;
 
     // Get owner id and verify ownership
@@ -228,10 +232,16 @@ router.put('/:orderId', requireAuth, async (req, res) => {
     const [orderRows] = await db.query('SELECT * FROM orders WHERE order_id = ? AND business_owner_id = ?', [orderId, ownerId]);
     if (!orderRows.length) return res.status(404).json({ error: 'Order not found or unauthorized' });
 
+    // Convert ISO datetime to MySQL format if needed
+    let formattedSchedule = scheduled_delivery_time;
+    if (scheduled_delivery_time && scheduled_delivery_time.includes('T')) {
+      formattedSchedule = new Date(scheduled_delivery_time).toISOString().slice(0, 19).replace('T', ' ');
+    }
+
     // Perform update
     await db.query(
-      `UPDATE orders SET pickup_location=?, drop_off_location=?, weight=?, size=?, scheduled_delivery_time=?, order_updated_at=NOW() WHERE order_id=? AND business_owner_id=?`,
-      [pickup_location, drop_off_location, weight, size, scheduled_delivery_time, orderId, ownerId]
+      `UPDATE orders SET pickup_location=?, drop_off_location=?, weight=?, size=?, scheduled_delivery_time=?, delivery_fee=?, order_updated_at=NOW() WHERE order_id=? AND business_owner_id=?`,
+      [pickup_location, drop_off_location, weight, size, formattedSchedule, delivery_fee || null, orderId, ownerId]
     );
     const [updatedOrder] = await db.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
     res.json(updatedOrder[0]);

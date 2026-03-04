@@ -43,8 +43,8 @@ const BusinessOwnerOrders = () => {
   const [editLoading, setEditLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   // Helper to update orders in-place
-  const updateOrderInState = updated => setOrders(orders => orders.map(o => o.id === updated.id ? updated : o));
-  const removeOrderFromState = id => setOrders(orders => orders.filter(o => o.id !== id));
+  const updateOrderInState = updated => setOrders(orders => orders.map(o => o.order_id === updated.order_id ? updated : o));
+  const removeOrderFromState = id => setOrders(orders => orders.filter(o => o.order_id !== id));
 
   const editPickupInputRef = useRef(null);
   const editDropoffInputRef = useRef(null);
@@ -1241,11 +1241,12 @@ const BusinessOwnerOrders = () => {
                         onClick={async () => { setDeleteLoading(true); try {
                           const token = await user.getIdToken();
                           const res = await fetch(
-                            `http://localhost:3001/api/orders/${selectedOrder.id}`,
+                            `http://localhost:3001/api/orders/${selectedOrder.order_id}`,
                             { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }
                           );
                           if (res.ok) {
-                            removeOrderFromState(selectedOrder.id);
+                            removeOrderFromState(selectedOrder.order_id);
+                            toast.success('Order deleted successfully!');
                             setSelectedOrder(null);
                           }
                         } finally { setDeleteLoading(false); setDeleting(false); }}}
@@ -1258,7 +1259,7 @@ const BusinessOwnerOrders = () => {
             ) : (
               <form className="space-y-4" onSubmit={async e => { e.preventDefault(); setEditLoading(true); try {
                 const token = await user.getIdToken();
-                const res = await fetch(`http://localhost:3001/api/orders/${selectedOrder.id}`, {
+                const res = await fetch(`http://localhost:3001/api/orders/${selectedOrder.order_id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                   body: JSON.stringify({
@@ -1275,8 +1276,12 @@ const BusinessOwnerOrders = () => {
                   updateOrderInState(updatedOrder);
                   setEditMode(false);
                   setSelectedOrder(updatedOrder);
+                  toast.success('Order updated successfully!');
+                } else {
+                  const err = await res.json();
+                  toast.error(err.error || 'Failed to update order');
                 }
-              } finally { setEditLoading(false); }}}>
+              } catch (err) { toast.error('Failed to update order'); } finally { setEditLoading(false); }}}>
                 <div className="grid grid-cols-1 gap-2 text-gray-200">
                   <div>
                     <label className="block text-gray-400 text-sm">Pickup Address</label>

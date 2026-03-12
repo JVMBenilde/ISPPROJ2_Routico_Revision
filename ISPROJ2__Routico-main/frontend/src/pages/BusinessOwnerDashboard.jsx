@@ -8,6 +8,7 @@ import BusinessOwnerOrders from '../components/BusinessOwnerOrders';
 import BusinessOwnerIssues from '../components/BusinessOwnerIssues';
 import BusinessOwnerSettings from '../components/BusinessOwnerSettings';
 import BusinessOwnerFleet from '../components/BusinessOwnerFleet';
+import BusinessOwnerReports from '../components/BusinessOwnerReports';
 import Footer from '../components/Footer';
 import Header from '../components/Header';
 
@@ -152,6 +153,7 @@ const BusinessOwnerDashboard = () => {
     { id: 'fleet', label: 'Fleet Management', icon: 'fleet' },
     { id: 'billing', label: 'Billing & Payments', icon: 'credit-card' },
     { id: 'charts', label: 'Analytics & Charts', icon: 'chart' },
+    { id: 'reports', label: 'Reports', icon: 'reports' },
     { id: 'issues', label: 'Issues', icon: 'issues' },
     { id: 'settings', label: 'Settings', icon: 'settings' }
   ];
@@ -160,7 +162,7 @@ const BusinessOwnerDashboard = () => {
   const sidebarSections = [
     { label: 'GENERAL', items: ['overview'] },
     { label: 'MANAGEMENT', items: ['orders', 'drivers', 'fleet'] },
-    { label: 'FINANCE', items: ['billing', 'charts'] },
+    { label: 'FINANCE', items: ['billing', 'charts', 'reports'] },
     { label: 'OTHER', items: ['issues', 'settings'] }
   ];
 
@@ -206,6 +208,12 @@ const BusinessOwnerDashboard = () => {
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+          </svg>
+        );
+      case 'reports':
+        return (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         );
       case 'settings':
@@ -620,6 +628,11 @@ const BusinessOwnerDashboard = () => {
             {/* Billing Tab */}
             {activeTab === 'billing' && (
               <BusinessOwnerBilling />
+            )}
+
+            {/* Reports Tab */}
+            {activeTab === 'reports' && (
+              <BusinessOwnerReports />
             )}
 
             {/* Issues Tab */}

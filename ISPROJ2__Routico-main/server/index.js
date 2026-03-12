@@ -78,6 +78,7 @@ const aiAnalyticsRoutes = require('./routes/ai-analytics');
 const rolesRoutes = require('./routes/roles');
 const auditLogRoutes = require('./routes/auditLogs');
 const vehiclesRoutes = require('./routes/vehicles');
+const reportsRoutes = require('./routes/reports');
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/billing', billingRoutes);
@@ -89,6 +90,7 @@ app.use('/api/ai-analytics', aiAnalyticsRoutes);
 app.use('/api/roles', rolesRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/vehicles', vehiclesRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -52,11 +52,76 @@ const HomePage = () => {
           <div className="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
             <div className="h-56 w-full sm:h-72 md:h-96 lg:w-full lg:h-full flex items-center justify-center relative">
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-3xl blur-2xl"></div>
-              <img
+              <svg
                 className="h-full w-full object-contain relative z-10 animate-float"
-                src="/images/Delivery.png"
-                alt="Delivery Service"
-              />
+                viewBox="0 0 800 600"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                role="img"
+                aria-label="Delivery Service"
+              >
+                {/* Road */}
+                <rect x="0" y="420" width="800" height="60" rx="8" fill="#1e293b" />
+                <line x1="50" y1="450" x2="130" y2="450" stroke="#94a3b8" strokeWidth="3" strokeDasharray="12 8" />
+                <line x1="180" y1="450" x2="260" y2="450" stroke="#94a3b8" strokeWidth="3" strokeDasharray="12 8" />
+                <line x1="310" y1="450" x2="390" y2="450" stroke="#94a3b8" strokeWidth="3" strokeDasharray="12 8" />
+                <line x1="440" y1="450" x2="520" y2="450" stroke="#94a3b8" strokeWidth="3" strokeDasharray="12 8" />
+                <line x1="570" y1="450" x2="650" y2="450" stroke="#94a3b8" strokeWidth="3" strokeDasharray="12 8" />
+                <line x1="700" y1="450" x2="780" y2="450" stroke="#94a3b8" strokeWidth="3" strokeDasharray="12 8" />
+
+                {/* Truck Body */}
+                <rect x="250" y="280" width="280" height="140" rx="12" fill="#3b82f6" />
+                <rect x="260" y="290" width="260" height="120" rx="8" fill="#2563eb" />
+                {/* Cargo lines */}
+                <rect x="280" y="310" width="80" height="8" rx="4" fill="#60a5fa" opacity="0.6" />
+                <rect x="280" y="330" width="60" height="8" rx="4" fill="#60a5fa" opacity="0.4" />
+                <rect x="280" y="350" width="70" height="8" rx="4" fill="#60a5fa" opacity="0.5" />
+                {/* Package icon on truck */}
+                <rect x="420" y="310" width="70" height="70" rx="8" fill="#f59e0b" />
+                <line x1="455" y1="310" x2="455" y2="380" stroke="#d97706" strokeWidth="2" />
+                <line x1="420" y1="345" x2="490" y2="345" stroke="#d97706" strokeWidth="2" />
+
+                {/* Cabin */}
+                <rect x="530" y="310" width="120" height="110" rx="12" fill="#1d4ed8" />
+                <rect x="545" y="325" width="55" height="50" rx="8" fill="#93c5fd" opacity="0.7" />
+                <rect x="610" y="360" width="30" height="50" rx="4" fill="#1e40af" />
+
+                {/* Wheels */}
+                <circle cx="340" cy="425" r="32" fill="#334155" />
+                <circle cx="340" cy="425" r="20" fill="#64748b" />
+                <circle cx="340" cy="425" r="8" fill="#94a3b8" />
+                <circle cx="580" cy="425" r="32" fill="#334155" />
+                <circle cx="580" cy="425" r="20" fill="#64748b" />
+                <circle cx="580" cy="425" r="8" fill="#94a3b8" />
+
+                {/* Location Pin */}
+                <g transform="translate(160, 140)">
+                  <path d="M30 0C13.4 0 0 13.4 0 30c0 22.5 30 50 30 50s30-27.5 30-50C60 13.4 46.6 0 30 0z" fill="#ef4444" />
+                  <circle cx="30" cy="28" r="12" fill="#fca5a5" />
+                </g>
+
+                {/* Route dots */}
+                <circle cx="220" cy="220" r="5" fill="#60a5fa" opacity="0.6" />
+                <circle cx="240" cy="240" r="4" fill="#60a5fa" opacity="0.5" />
+                <circle cx="255" cy="260" r="3" fill="#60a5fa" opacity="0.4" />
+
+                {/* Speed lines */}
+                <line x1="180" y1="340" x2="230" y2="340" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" opacity="0.5" />
+                <line x1="160" y1="360" x2="230" y2="360" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" opacity="0.4" />
+                <line x1="190" y1="380" x2="230" y2="380" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" opacity="0.3" />
+
+                {/* Small floating packages */}
+                <g transform="translate(620, 180) rotate(-15)">
+                  <rect width="40" height="40" rx="6" fill="#f59e0b" opacity="0.8" />
+                  <line x1="20" y1="0" x2="20" y2="40" stroke="#d97706" strokeWidth="1.5" />
+                  <line x1="0" y1="20" x2="40" y2="20" stroke="#d97706" strokeWidth="1.5" />
+                </g>
+                <g transform="translate(680, 240) rotate(10)">
+                  <rect width="30" height="30" rx="5" fill="#f59e0b" opacity="0.6" />
+                  <line x1="15" y1="0" x2="15" y2="30" stroke="#d97706" strokeWidth="1.5" />
+                  <line x1="0" y1="15" x2="30" y2="15" stroke="#d97706" strokeWidth="1.5" />
+                </g>
+              </svg>
             </div>
           </div>
         </section>

@@ -1428,24 +1428,103 @@ const BusinessOwnerOrders = () => {
                 </div>
 
                 {/* Status Update */}
-                <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Update Status</label>
-                  <div className="flex flex-wrap gap-2">
-                    {['pending', 'assigned', 'in_transit', 'delivered', 'completed', 'cancelled'].map(s => (
-                      <button
-                        key={s}
-                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                          selectedOrder.order_status === s
-                            ? 'bg-blue-600 text-white ring-2 ring-blue-400'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                        onClick={() => handleStatusChange(selectedOrder.order_id, s)}
-                        disabled={updatingStatus || selectedOrder.order_status === s}
-                      >
-                        {s.replace('_', ' ')}
-                      </button>
-                    ))}
-                  </div>
+                <div className="mb-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                  {(() => {
+                    const validTransitions = {
+                      pending: ['assigned', 'cancelled'],
+                      assigned: ['in_transit', 'cancelled'],
+                      in_transit: ['delivered', 'cancelled'],
+                      delivered: ['completed'],
+                      completed: [],
+                      cancelled: []
+                    };
+                    const statusFlow = ['pending', 'assigned', 'in_transit', 'delivered', 'completed'];
+                    const statusLabels = {
+                      pending: 'Pending', assigned: 'Assigned', in_transit: 'In Transit',
+                      delivered: 'Delivered', completed: 'Completed', cancelled: 'Cancelled'
+                    };
+                    const statusColors = {
+                      pending: 'bg-yellow-500', assigned: 'bg-blue-500', in_transit: 'bg-purple-500',
+                      delivered: 'bg-teal-500', completed: 'bg-green-500', cancelled: 'bg-red-500'
+                    };
+                    const currentIdx = statusFlow.indexOf(selectedOrder.order_status);
+                    const isCancelled = selectedOrder.order_status === 'cancelled';
+                    const allowed = validTransitions[selectedOrder.order_status] || [];
+
+                    return (
+                      <>
+                        {/* Progress tracker */}
+                        <div className="flex items-center justify-between mb-4">
+                          {statusFlow.map((s, i) => {
+                            const isActive = s === selectedOrder.order_status && !isCancelled;
+                            const isPast = !isCancelled && currentIdx >= 0 && i < currentIdx;
+                            return (
+                              <div key={s} className="flex items-center flex-1">
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                                    isActive ? `${statusColors[s]} border-white text-white shadow-lg shadow-${s === 'completed' ? 'green' : 'blue'}-500/30` :
+                                    isPast ? 'bg-green-600 border-green-400 text-white' :
+                                    'bg-gray-700 border-gray-600 text-gray-500'
+                                  }`}>
+                                    {isPast ? '✓' : i + 1}
+                                  </div>
+                                  <span className={`text-[10px] mt-1 font-medium ${isActive ? 'text-white' : isPast ? 'text-green-400' : 'text-gray-500'}`}>
+                                    {statusLabels[s]}
+                                  </span>
+                                </div>
+                                {i < statusFlow.length - 1 && (
+                                  <div className={`flex-1 h-0.5 mx-1 mt-[-12px] ${isPast || (isActive && i < currentIdx) ? 'bg-green-500' : 'bg-gray-700'}`} />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Cancelled banner */}
+                        {isCancelled && (
+                          <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-red-900/40 border border-red-700 rounded-lg">
+                            <span className="text-red-400 text-lg">✕</span>
+                            <span className="text-red-300 text-sm font-medium">This order has been cancelled</span>
+                          </div>
+                        )}
+
+                        {/* Current status + action buttons */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-400">Current:</span>
+                            <span className={`px-3 py-1 text-xs font-bold rounded-full ${getStatusColor(selectedOrder.order_status)}`}>
+                              {statusLabels[selectedOrder.order_status] || selectedOrder.order_status}
+                            </span>
+                          </div>
+                          {allowed.length > 0 ? (
+                            <div className="flex gap-2">
+                              {allowed.filter(s => s !== 'cancelled').map(s => (
+                                <button
+                                  key={s}
+                                  className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${statusColors[s]} hover:opacity-90 text-white shadow-md disabled:opacity-50`}
+                                  onClick={() => handleStatusChange(selectedOrder.order_id, s)}
+                                  disabled={updatingStatus}
+                                >
+                                  → {statusLabels[s]}
+                                </button>
+                              ))}
+                              {allowed.includes('cancelled') && (
+                                <button
+                                  className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all bg-red-800 hover:bg-red-700 text-red-200 border border-red-600 disabled:opacity-50"
+                                  onClick={() => handleStatusChange(selectedOrder.order_id, 'cancelled')}
+                                  disabled={updatingStatus}
+                                >
+                                  Cancel Order
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-500 italic">No further actions</span>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
                 <div className="grid grid-cols-1 gap-2 text-gray-200 mb-6">
                   <div><b>Status:</b> <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedOrder.order_status)}`}>{selectedOrder.order_status}</span></div>

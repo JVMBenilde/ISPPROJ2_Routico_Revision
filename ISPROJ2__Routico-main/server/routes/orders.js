@@ -187,6 +187,16 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
       return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
+    // Define valid status transitions
+    const validTransitions = {
+      pending: ['assigned', 'cancelled'],
+      assigned: ['in_transit', 'cancelled'],
+      in_transit: ['delivered', 'cancelled'],
+      delivered: ['completed'],
+      completed: [],   // terminal state
+      cancelled: []    // terminal state
+    };
+
     // Get owner_id for this user
     const [ownerResult] = await db.query(
       'SELECT owner_id FROM businessowners WHERE user_id = ?',
@@ -205,6 +215,15 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
 
     if (orders.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Validate status transition
+    const currentStatus = orders[0].order_status;
+    const allowedNext = validTransitions[currentStatus] || [];
+    if (!allowedNext.includes(status)) {
+      return res.status(400).json({
+        error: `Cannot change status from '${currentStatus}' to '${status}'. Allowed transitions: ${allowedNext.length > 0 ? allowedNext.join(', ') : 'none (terminal state)'}`
+      });
     }
 
     // Update order_status (correct column name)

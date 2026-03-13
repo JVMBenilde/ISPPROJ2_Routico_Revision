@@ -88,10 +88,10 @@ const Header = () => {
         <div className="flex items-center justify-between h-16">
           {/* Left: Dashboard title */}
           <div className="flex items-center min-w-0">
-            <h2 className="text-lg font-semibold text-white truncate">
+            <Link to="/dashboard" className="text-lg font-semibold text-white truncate hover:text-blue-400 transition-colors">
               {userRole === 'administrator' ? 'Admin Dashboard' :
                userRole === 'driver' ? 'Driver Portal' : 'Dashboard'}
-            </h2>
+            </Link>
           </div>
 
           {/* Center: Search Bar */}

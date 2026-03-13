@@ -49,6 +49,12 @@ const PublicRoute = ({ children, allowAuthenticated = false }) => {
   return children;
 };
 
+// Catch-all redirect: logged in → dashboard, logged out → home
+const CatchAllRedirect = () => {
+  const { user } = useAuth();
+  return <Navigate to={user ? "/dashboard" : "/"} replace />;
+};
+
 // Main App Layout
 const AppLayout = ({ children }) => {
   return (
@@ -140,8 +146,8 @@ function App() {
               } 
             />
             
-            {/* Catch all route */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* Catch all route - redirect to dashboard if logged in, home if not */}
+            <Route path="*" element={<CatchAllRedirect />} />
           </Routes>
         </div>
       </Router>

@@ -19,7 +19,7 @@ function nearestNeighborOptimize(locations) {
 
   const visited = new Set();
   const route = [];
-  let current = 0; // Start from first location (depot)
+  let current = 0; // Start from first location (depot/pickup)
   visited.add(current);
   route.push(locations[current]);
 
@@ -60,6 +60,28 @@ function totalRouteDistance(locations) {
   return total;
 }
 
+// Geocode an address using Google Maps Geocoding API
+async function geocodeAddress(address) {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === 'OK' && data.results.length > 0) {
+      const loc = data.results[0].geometry.location;
+      return { lat: loc.lat, lng: loc.lng };
+    }
+    console.warn(`Geocoding failed for "${address}": ${data.status}`);
+    return null;
+  } catch (error) {
+    console.error(`Geocoding error for "${address}":`, error.message);
+    return null;
+  }
+}
+
 // Optimize route for selected orders
 router.post('/optimize', requirePerm('optimize_routes'), async (req, res) => {
   try {
@@ -67,8 +89,8 @@ router.post('/optimize', requirePerm('optimize_routes'), async (req, res) => {
     const userId = req.user.user_id;
     const { orderIds, depotLat, depotLng } = req.body;
 
-    if (!orderIds || orderIds.length === 0) {
-      return res.status(400).json({ error: 'No orders selected for optimization' });
+    if (!orderIds || orderIds.length < 2) {
+      return res.status(400).json({ error: 'Select at least 2 orders for optimization' });
     }
 
     // Get owner
@@ -95,67 +117,133 @@ router.post('/optimize', requirePerm('optimize_routes'), async (req, res) => {
       return res.status(404).json({ error: 'No matching orders found' });
     }
 
-    // For optimization we need lat/lng. We'll use the addresses and return optimized order.
-    // Since we may not have geocoded coordinates stored, we'll build stops from drop_off_location
-    const stops = orders.map(o => ({
-      order_id: o.order_id,
-      customer_name: o.customer_name,
-      pickup_location: o.pickup_location,
-      drop_off_location: o.drop_off_location,
-      lat: 0, lng: 0 // Will be set by geocoding or estimated
-    }));
+    // Geocode all drop-off addresses using Google Maps
+    console.log(`Geocoding ${orders.length} addresses for route optimization...`);
+    const geocodedStops = [];
 
-    // If depot coordinates provided, use as starting point
-    // Otherwise use first order's location
-    const depot = (depotLat && depotLng)
-      ? { lat: parseFloat(depotLat), lng: parseFloat(depotLng), order_id: 'depot', customer_name: 'Depot' }
-      : null;
+    for (const order of orders) {
+      const address = order.drop_off_location;
+      const coords = await geocodeAddress(address);
 
-    // Since we don't have stored lat/lng, return orders in nearest-neighbor order
-    // based on simple string-based grouping (orders going to similar areas together)
-    // For a real implementation, this would use Google Maps Distance Matrix API
+      if (coords) {
+        geocodedStops.push({
+          order_id: order.order_id,
+          customer_name: order.customer_name,
+          pickup_location: order.pickup_location,
+          drop_off_location: order.drop_off_location,
+          lat: coords.lat,
+          lng: coords.lng
+        });
+      } else {
+        // If geocoding fails, still include with a note
+        geocodedStops.push({
+          order_id: order.order_id,
+          customer_name: order.customer_name,
+          pickup_location: order.pickup_location,
+          drop_off_location: order.drop_off_location,
+          lat: 0,
+          lng: 0,
+          geocode_failed: true
+        });
+      }
+    }
 
-    // Simple heuristic: group by first part of drop_off_location
-    const sortedOrders = [...orders].sort((a, b) => {
-      const addrA = (a.drop_off_location || '').toLowerCase();
-      const addrB = (b.drop_off_location || '').toLowerCase();
-      return addrA.localeCompare(addrB);
-    });
+    // Separate successfully geocoded and failed stops
+    const validStops = geocodedStops.filter(s => !s.geocode_failed);
+    const failedStops = geocodedStops.filter(s => s.geocode_failed);
+
+    if (validStops.length < 2) {
+      return res.status(400).json({
+        error: 'Could not geocode enough addresses. Please ensure at least 2 orders have valid delivery addresses.'
+      });
+    }
+
+    // If depot coordinates provided, add as starting point
+    if (depotLat && depotLng) {
+      validStops.unshift({
+        order_id: 'depot',
+        customer_name: 'Depot (Start)',
+        drop_off_location: 'Starting Point',
+        lat: parseFloat(depotLat),
+        lng: parseFloat(depotLng),
+        is_depot: true
+      });
+    }
+
+    // Calculate original distance (in the order they were submitted)
+    const originalDistance = totalRouteDistance(validStops);
+
+    // Run nearest-neighbor optimization
+    const optimizedRoute = nearestNeighborOptimize(validStops);
+
+    // Calculate optimized distance
+    const optimizedDistance = totalRouteDistance(optimizedRoute);
+
+    // Calculate actual savings
+    const savingsPercent = originalDistance > 0
+      ? Math.round(((originalDistance - optimizedDistance) / originalDistance) * 100)
+      : 0;
+
+    // Filter out depot from the result for DB storage
+    const optimizedOrders = optimizedRoute.filter(s => !s.is_depot);
 
     // Save optimization result
+    const startLocation = optimizedOrders[0]?.pickup_location || '';
+    const destination = optimizedOrders[optimizedOrders.length - 1]?.drop_off_location || '';
+    const optimizedRouteJson = JSON.stringify(optimizedOrders.map((o, i) => ({
+      sequence: i + 1,
+      order_id: o.order_id,
+      drop_off_location: o.drop_off_location
+    })));
+
     const [result] = await db.query(
-      `INSERT INTO routeoptimization (owner_id, optimization_date, total_orders, status)
-       VALUES (?, NOW(), ?, 'completed')`,
-      [ownerId, orders.length]
+      `INSERT INTO routeoptimization (start_location, destination, estimated_distance, optimized_route)
+       VALUES (?, ?, ?, ?)`,
+      [startLocation, destination, optimizedDistance.toFixed(2), optimizedRouteJson]
     );
 
     const optimizationId = result.insertId;
 
     // Save route order
-    for (let i = 0; i < sortedOrders.length; i++) {
+    for (let i = 0; i < optimizedOrders.length; i++) {
       await db.query(
-        `INSERT INTO routeorders (route_id, order_id, sequence_number)
-         VALUES (?, ?, ?)`,
-        [optimizationId, sortedOrders[i].order_id, i + 1]
+        `INSERT INTO routeorders (route_id, order_id)
+         VALUES (?, ?)`,
+        [optimizationId, optimizedOrders[i].order_id]
       );
     }
 
-    // Calculate estimated savings
-    const originalDistance = orders.length * 5; // rough estimate km per stop
-    const optimizedDistance = originalDistance * 0.75; // ~25% savings estimate
-
-    res.json({
-      optimization_id: optimizationId,
-      original_order: orders.map(o => ({ order_id: o.order_id, customer_name: o.customer_name, drop_off_location: o.drop_off_location })),
-      optimized_order: sortedOrders.map((o, i) => ({
+    // Append any failed geocode orders at the end
+    const fullOptimizedOrder = [
+      ...optimizedOrders.map((o, i) => ({
         sequence: i + 1,
         order_id: o.order_id,
         customer_name: o.customer_name,
+        pickup_location: o.pickup_location,
         drop_off_location: o.drop_off_location
       })),
-      total_stops: sortedOrders.length,
+      ...failedStops.map((o, i) => ({
+        sequence: optimizedOrders.length + i + 1,
+        order_id: o.order_id,
+        customer_name: o.customer_name,
+        pickup_location: o.pickup_location,
+        drop_off_location: o.drop_off_location + ' (address could not be located)'
+      }))
+    ];
+
+    res.json({
+      optimization_id: optimizationId,
+      original_order: orders.map(o => ({
+        order_id: o.order_id,
+        customer_name: o.customer_name,
+        pickup_location: o.pickup_location,
+        drop_off_location: o.drop_off_location
+      })),
+      optimized_order: fullOptimizedOrder,
+      total_stops: fullOptimizedOrder.length,
       estimated_distance_km: optimizedDistance.toFixed(1),
-      estimated_savings_percent: 25
+      original_distance_km: originalDistance.toFixed(1),
+      estimated_savings_percent: Math.max(0, savingsPercent)
     });
   } catch (error) {
     console.error('Error optimizing route:', error);
@@ -185,6 +273,59 @@ router.get('/history', requirePerm('view_routes'), async (req, res) => {
   } catch (error) {
     console.error('Error fetching optimization history:', error);
     res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+// Assign a driver to all orders in an optimized route
+router.post('/assign-driver', requirePerm('optimize_routes'), async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const userId = req.user.user_id;
+    const { routeId, driverId, orderIds } = req.body;
+
+    if (!driverId || !orderIds || orderIds.length === 0) {
+      return res.status(400).json({ error: 'Driver ID and order IDs are required' });
+    }
+
+    // Verify owner
+    const [ownerResult] = await db.query(
+      'SELECT owner_id FROM businessowners WHERE user_id = ?',
+      [userId]
+    );
+    if (ownerResult.length === 0) {
+      return res.status(403).json({ error: 'No owner profile' });
+    }
+    const ownerId = ownerResult[0].owner_id;
+
+    // Verify driver belongs to this owner
+    const [driverResult] = await db.query(
+      'SELECT driver_id, first_name, last_name FROM drivers WHERE driver_id = ? AND owner_id = ?',
+      [driverId, ownerId]
+    );
+    if (driverResult.length === 0) {
+      return res.status(404).json({ error: 'Driver not found' });
+    }
+
+    // Assign driver to all orders, set status to 'assigned', and save route info with sequence
+    for (let i = 0; i < orderIds.length; i++) {
+      await db.query(
+        `UPDATE orders SET assigned_driver_id = ?, order_status = 'assigned', route_id = ?, route_sequence = ?
+         WHERE order_id = ? AND business_owner_id = ?`,
+        [driverId, routeId, i + 1, orderIds[i], ownerId]
+      );
+    }
+
+    const driverName = `${driverResult[0].first_name} ${driverResult[0].last_name}`;
+    res.json({
+      success: true,
+      driver_id: driverId,
+      driver_name: driverName,
+      orders_assigned: orderIds.length,
+      route_id: routeId
+    });
+  } catch (error) {
+    console.error('Error assigning driver to route:', error);
+    res.status(500).json({ error: 'Failed to assign driver to route' });
   }
 });
 

@@ -52,6 +52,7 @@ const BusinessOwnerOrders = () => {
   const [selectedForOptimize, setSelectedForOptimize] = useState([]);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizationResult, setOptimizationResult] = useState(null);
+  const optimizationMapRef = useRef(null);
   // Helper to update orders in-place
   const updateOrderInState = updated => setOrders(orders => orders.map(o => o.order_id === updated.order_id ? updated : o));
   const removeOrderFromState = id => setOrders(orders => orders.filter(o => o.order_id !== id));
@@ -238,8 +239,13 @@ const BusinessOwnerOrders = () => {
       // Check if script already exists
       const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
       if (existingScript) {
-        console.log('Google Maps script already loaded, waiting for load...');
-        existingScript.addEventListener('load', () => initializeGoogleMaps());
+        console.log('Google Maps script already in DOM, polling for availability...');
+        const poll = setInterval(() => {
+          if (window.google && window.google.maps) {
+            clearInterval(poll);
+            initializeGoogleMaps();
+          }
+        }, 200);
         return;
       }
       
@@ -271,10 +277,12 @@ const BusinessOwnerOrders = () => {
   // Re-initialize autocomplete and map when form is shown
   useEffect(() => {
     if (showCreateForm && window.google && window.google.maps) {
+      // Reset global map so it gets re-created with the new ref
+      window.orderMap = null;
       // Small delay to ensure refs are available
       setTimeout(() => {
         initializeGoogleMaps();
-      }, 100);
+      }, 200);
     }
   }, [showCreateForm]);
 
@@ -774,14 +782,178 @@ const BusinessOwnerOrders = () => {
     if (selectedOrder) fetchStatusLog(selectedOrder.order_id);
   }, [selectedOrder]);
 
+  // Show optimization route map
+  useEffect(() => {
+    if (!optimizationResult || !optimizationMapRef.current) return;
+    const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+    if (!apiKey) return;
+
+    const initialize = async () => {
+      const geocode = (address) => {
+        return new Promise(resolve => {
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode({ address }, (results, status) => {
+            if (status === 'OK') {
+              const loc = results[0].geometry.location;
+              resolve({ lat: loc.lat(), lng: loc.lng() });
+            } else {
+              resolve(null);
+            }
+          });
+        });
+      };
+
+      const stops = optimizationResult.optimized_order || [];
+      if (stops.length < 2) return;
+
+      // Geocode all stops
+      const coords = [];
+      for (const stop of stops) {
+        const loc = await geocode(stop.drop_off_location);
+        if (loc) coords.push({ ...stop, ...loc });
+      }
+      if (coords.length < 2) return;
+
+      optimizationMapRef.current.innerHTML = '';
+      const map = new window.google.maps.Map(optimizationMapRef.current, {
+        zoom: 12,
+        center: coords[0],
+      });
+
+      // Add numbered markers
+      coords.forEach((c, i) => {
+        new window.google.maps.Marker({
+          position: { lat: c.lat, lng: c.lng },
+          map,
+          label: { text: String(i + 1), color: 'white', fontWeight: 'bold' },
+          title: `Stop ${i + 1}: ${c.drop_off_location}`,
+        });
+      });
+
+      // Draw route through waypoints
+      const ds = new window.google.maps.DirectionsService();
+      const dr = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: true });
+      const waypoints = coords.slice(1, -1).map(c => ({
+        location: { lat: c.lat, lng: c.lng },
+        stopover: true
+      }));
+
+      ds.route({
+        origin: { lat: coords[0].lat, lng: coords[0].lng },
+        destination: { lat: coords[coords.length - 1].lat, lng: coords[coords.length - 1].lng },
+        waypoints,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        region: 'ph',
+      }, (result, status) => {
+        if (status === 'OK') dr.setDirections(result);
+      });
+    };
+
+    if (!(window.google && window.google.maps)) {
+      const url = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      if (!document.querySelector(`script[src='${url}']`)) {
+        const script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+        script.onload = initialize;
+        document.head.appendChild(script);
+      } else {
+        initialize();
+      }
+    } else {
+      initialize();
+    }
+  }, [optimizationResult]);
+
+  // Helper to render a single order card
+  const renderOrderCard = (order, borderColor = 'gray-700', hoverColor = 'gray-500') => (
+    <div
+      key={order.order_id}
+      className={`bg-gray-800 rounded-lg border border-${borderColor} p-6 hover:border-${hoverColor} transition-colors cursor-pointer group ${(selectedOrder && selectedOrder.order_id === order.order_id) ? 'ring-2 ring-blue-400' : ''}`}
+      onClick={() => !showCreateForm && setSelectedOrder(order)}
+      tabIndex={0}
+      role="button"
+      aria-label={`View Order ${order.order_id}`}
+    >
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <div className="flex items-center space-x-3 mb-3">
+            {order.route_sequence && (
+              <span className="w-7 h-7 bg-purple-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                {order.route_sequence}
+              </span>
+            )}
+            <h4 className="text-lg font-semibold text-white">{order.customer_name || 'Customer'}</h4>
+            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.order_status)}`}>
+              {order.order_status}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
+            <div>
+              <p className="text-gray-400">Pickup:</p>
+              <p className="text-white">{order.pickup_location}</p>
+            </div>
+            <div>
+              <p className="text-gray-400">Delivery:</p>
+              <p className="text-white">{order.drop_off_location}</p>
+            </div>
+            <div>
+              <p className="text-gray-400">Weight:</p>
+              <p className="text-white">{order.weight} kg</p>
+            </div>
+            {order.size && (
+              <div>
+                <p className="text-gray-400">Size:</p>
+                <p className="text-white">{order.size}</p>
+              </div>
+            )}
+            {order.scheduled_delivery_time && (
+              <div>
+                <p className="text-gray-400">Scheduled:</p>
+                <p className="text-white">{new Date(order.scheduled_delivery_time).toLocaleString()}</p>
+              </div>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={e => { e.stopPropagation(); setSelectedOrder(selectedOrder?.order_id === order.order_id ? null : order); }}
+          className="ml-4 text-gray-300 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          tabIndex={-1}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+
   // Group rendering refactored into function
   const renderGroupedOrders = () => {
-    // Grouping logic
+    // Separate route-grouped orders from individual orders
+    const routeGroups = {};
+    const individualOrders = [];
+
+    orders.forEach(order => {
+      if (order.route_id && order.route_sequence) {
+        if (!routeGroups[order.route_id]) routeGroups[order.route_id] = [];
+        routeGroups[order.route_id].push(order);
+      } else {
+        individualOrders.push(order);
+      }
+    });
+
+    // Sort each route group by sequence
+    Object.keys(routeGroups).forEach(routeId => {
+      routeGroups[routeId].sort((a, b) => a.route_sequence - b.route_sequence);
+    });
+
+    // Grouping logic for individual orders
     const today = new Date();
     const previousMap = {};
     const todayOrders = [];
     const upcomingMap = {};
-    orders.forEach(order => {
+    individualOrders.forEach(order => {
       if (order.scheduled_delivery_time) {
         const d = parseISO(order.scheduled_delivery_time);
         const dateKey = format(d, "yyyy-MM-dd");
@@ -798,8 +970,47 @@ const BusinessOwnerOrders = () => {
     });
     const previousDates = Object.keys(previousMap).sort().reverse();
     const upcomingDates = Object.keys(upcomingMap).sort();
+    const routeIds = Object.keys(routeGroups);
     return (
       <div className="space-y-8">
+        {/* Optimized Routes */}
+        {routeIds.length > 0 && (
+          <div>
+            <h4 className="text-xl font-semibold text-purple-400 mb-4">Optimized Routes</h4>
+            {routeIds.map(routeId => {
+              const routeOrders = routeGroups[routeId];
+              const driverName = routeOrders[0]?.driver_name;
+              const allCompleted = routeOrders.every(o => o.order_status === 'completed');
+              const completedCount = routeOrders.filter(o => o.order_status === 'completed').length;
+              return (
+                <div key={routeId} className="mb-6 border border-purple-500/30 rounded-xl p-4 bg-gray-900/50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                      </svg>
+                      <span className="text-purple-300 font-semibold">Route #{routeId}</span>
+                      <span className="text-gray-400 text-sm">({routeOrders.length} stops)</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {driverName && (
+                        <span className="text-sm text-blue-400">Driver: {driverName}</span>
+                      )}
+                      <span className={`text-xs px-2 py-1 rounded-full ${allCompleted ? 'bg-green-500/20 text-green-400' : 'bg-purple-500/20 text-purple-300'}`}>
+                        {allCompleted ? 'Route Complete' : `${completedCount}/${routeOrders.length} completed`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3">
+                    {routeOrders.map(order => renderOrderCard(order))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Individual Orders */}
         {previousDates.length > 0 && (
           <div>
             <h4 className="text-xl font-semibold text-gray-400 mb-4">Previous Orders</h4>
@@ -807,63 +1018,7 @@ const BusinessOwnerOrders = () => {
               <div key={dateStr}>
                 <h5 className="text-lg font-semibold text-gray-400 mb-2">{format(parseISO(dateStr), 'MMMM d, yyyy')}</h5>
                 <div className="grid grid-cols-1 gap-4">
-                  {previousMap[dateStr].map(order => (
-                    <div
-                      key={order.order_id}
-                      className={`bg-gray-800 rounded-lg border border-gray-700 p-6 hover:border-gray-500 transition-colors cursor-pointer group ${(selectedOrder && selectedOrder.order_id === order.order_id) ? 'ring-2 ring-gray-400' : ''}`}
-                      onClick={() => !showCreateForm && setSelectedOrder(order)}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`View Order ${order.order_id}`}
-                    >
-                      {/* order card code unchanged */}
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <h4 className="text-lg font-semibold text-white">{order.customer_name || 'Customer'}</h4>
-                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.order_status)}`}>
-                              {order.order_status}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
-                            <div>
-                              <p className="text-gray-400">Pickup:</p>
-                              <p className="text-white">{order.pickup_location}</p>
-                            </div>
-                            <div>
-                              <p className="text-gray-400">Delivery:</p>
-                              <p className="text-white">{order.drop_off_location}</p>
-                            </div>
-                            <div>
-                              <p className="text-gray-400">Weight:</p>
-                              <p className="text-white">{order.weight} kg</p>
-                            </div>
-                            {order.size && (
-                              <div>
-                                <p className="text-gray-400">Size:</p>
-                                <p className="text-white">{order.size}</p>
-                              </div>
-                            )}
-                            {order.scheduled_delivery_time && (
-                              <div>
-                                <p className="text-gray-400">Scheduled:</p>
-                                <p className="text-white">{new Date(order.scheduled_delivery_time).toLocaleString()}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <button
-                          onClick={e => { e.stopPropagation(); setSelectedOrder(selectedOrder?.order_id === order.order_id ? null : order); }}
-                          className="ml-4 text-gray-300 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                          tabIndex={-1}
-                        >
-                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  {previousMap[dateStr].map(order => renderOrderCard(order))}
                 </div>
               </div>
             ))}
@@ -873,63 +1028,7 @@ const BusinessOwnerOrders = () => {
           <div>
             <h4 className="text-xl font-semibold text-blue-400 mb-4">Today</h4>
             <div className="grid grid-cols-1 gap-4">
-              {todayOrders.map(order => (
-                <div
-                  key={order.order_id}
-                  className={`bg-gray-800 rounded-lg border border-gray-700 p-6 hover:border-blue-500 transition-colors cursor-pointer group ${(selectedOrder && selectedOrder.order_id === order.order_id) ? 'ring-2 ring-blue-400' : ''}`}
-                  onClick={() => !showCreateForm && setSelectedOrder(order)}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`View Order ${order.order_id}`}
-                >
-                  {/* order card code unchanged */}
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-3">
-                        <h4 className="text-lg font-semibold text-white">{order.customer_name || 'Customer'}</h4>
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.order_status)}`}>
-                          {order.order_status}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
-                        <div>
-                          <p className="text-gray-400">Pickup:</p>
-                          <p className="text-white">{order.pickup_location}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400">Delivery:</p>
-                          <p className="text-white">{order.drop_off_location}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400">Weight:</p>
-                          <p className="text-white">{order.weight} kg</p>
-                        </div>
-                        {order.size && (
-                          <div>
-                            <p className="text-gray-400">Size:</p>
-                            <p className="text-white">{order.size}</p>
-                          </div>
-                        )}
-                        {order.scheduled_delivery_time && (
-                          <div>
-                            <p className="text-gray-400">Scheduled:</p>
-                            <p className="text-white">{new Date(order.scheduled_delivery_time).toLocaleString()}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={e => { e.stopPropagation(); setSelectedOrder(selectedOrder?.order_id === order.order_id ? null : order); }}
-                      className="ml-4 text-blue-400 hover:text-blue-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                      tabIndex={-1}
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {todayOrders.map(order => renderOrderCard(order))}
             </div>
           </div>
         )}
@@ -937,63 +1036,7 @@ const BusinessOwnerOrders = () => {
           <div key={dateStr}>
             <h4 className="text-xl font-semibold text-yellow-400 mb-4">{format(parseISO(dateStr), 'MMMM d, yyyy')}</h4>
             <div className="grid grid-cols-1 gap-4">
-              {upcomingMap[dateStr].map(order => (
-                <div
-                  key={order.order_id}
-                  className={`bg-gray-800 rounded-lg border border-gray-700 p-6 hover:border-yellow-400 transition-colors cursor-pointer group ${(selectedOrder && selectedOrder.order_id === order.order_id) ? 'ring-2 ring-yellow-400' : ''}`}
-                  onClick={() => !showCreateForm && setSelectedOrder(order)}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`View Order ${order.order_id}`}
-                >
-                  {/* order card code unchanged */}
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-3">
-                        <h4 className="text-lg font-semibold text-white">{order.customer_name || 'Customer'}</h4>
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.order_status)}`}>
-                          {order.order_status}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
-                        <div>
-                          <p className="text-gray-400">Pickup:</p>
-                          <p className="text-white">{order.pickup_location}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400">Delivery:</p>
-                          <p className="text-white">{order.drop_off_location}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400">Weight:</p>
-                          <p className="text-white">{order.weight} kg</p>
-                        </div>
-                        {order.size && (
-                          <div>
-                            <p className="text-gray-400">Size:</p>
-                            <p className="text-white">{order.size}</p>
-                          </div>
-                        )}
-                        {order.scheduled_delivery_time && (
-                          <div>
-                            <p className="text-gray-400">Scheduled:</p>
-                            <p className="text-white">{new Date(order.scheduled_delivery_time).toLocaleString()}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={e => { e.stopPropagation(); setSelectedOrder(selectedOrder?.order_id === order.order_id ? null : order); }}
-                      className="ml-4 text-yellow-400 hover:text-yellow-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                      tabIndex={-1}
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {upcomingMap[dateStr].map(order => renderOrderCard(order))}
             </div>
           </div>
         ))}
@@ -1341,8 +1384,12 @@ const BusinessOwnerOrders = () => {
                     }}
                     className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-purple-500"
                   />
-                  <span className="text-white text-sm">#{order.order_id} - {order.customer_name || 'Unknown'}</span>
-                  <span className="text-gray-400 text-xs truncate">{order.drop_off_location}</span>
+                  <span className="text-white text-sm font-medium">#{order.order_id} - {order.customer_name || 'Unknown'}</span>
+                  <span className="text-gray-400 text-xs truncate flex-1">
+                    <span className="text-green-400">Pickup:</span> {order.pickup_location || 'N/A'}
+                    <span className="mx-1">→</span>
+                    <span className="text-red-400">Dropoff:</span> {order.drop_off_location}
+                  </span>
                 </label>
               ))}
             </div>
@@ -1360,14 +1407,21 @@ const BusinessOwnerOrders = () => {
             {optimizationResult && (
               <div className="mt-4 p-3 bg-gray-900 rounded-lg border border-green-500/30">
                 <h4 className="text-green-400 font-medium text-sm mb-2">Optimized Route Order:</h4>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {optimizationResult.optimized_order.map((stop) => (
-                    <div key={stop.order_id} className="flex items-center gap-2 text-sm">
-                      <span className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                    <div key={stop.order_id} className="flex items-start gap-2 text-sm p-2 bg-gray-800/50 rounded">
+                      <span className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
                         {stop.sequence}
                       </span>
-                      <span className="text-white">{stop.customer_name}</span>
-                      <span className="text-gray-400 text-xs truncate">{stop.drop_off_location}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white font-medium">#{stop.order_id} - {stop.customer_name}</div>
+                        <div className="text-xs text-gray-400 truncate">
+                          <span className="text-green-400">Pickup:</span> {stop.pickup_location || 'N/A'}
+                        </div>
+                        <div className="text-xs text-gray-400 truncate">
+                          <span className="text-red-400">Dropoff:</span> {stop.drop_off_location}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1375,6 +1429,65 @@ const BusinessOwnerOrders = () => {
                   <span>Total stops: {optimizationResult.total_stops}</span>
                   <span>Est. distance: {optimizationResult.estimated_distance_km} km</span>
                   <span className="text-green-400">~{optimizationResult.estimated_savings_percent}% savings</span>
+                </div>
+                <div ref={optimizationMapRef} style={{ width: '100%', height: 350, borderRadius: 8, border: '1px solid #334155', background: '#232946', marginTop: 12 }} />
+
+                {/* Assign Driver to Route */}
+                <div className="mt-4 p-3 bg-gray-800 rounded-lg border border-blue-500/30">
+                  <h5 className="text-blue-400 font-medium text-sm mb-2">Assign Driver to Entire Route</h5>
+                  <div className="flex items-center gap-3">
+                    <select
+                      id="routeDriverSelect"
+                      className="flex-1 bg-gray-700 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm"
+                      defaultValue=""
+                    >
+                      <option value="">-- Select Driver --</option>
+                      {availableDrivers.map(d => (
+                        <option key={d.driver_id} value={d.driver_id}>
+                          {d.first_name} {d.last_name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={async () => {
+                        const driverId = document.getElementById('routeDriverSelect').value;
+                        if (!driverId) {
+                          toast.error('Please select a driver');
+                          return;
+                        }
+                        try {
+                          const token = getToken();
+                          const orderIds = optimizationResult.optimized_order.map(s => s.order_id);
+                          const res = await fetch('http://localhost:3001/api/routes/assign-driver', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            body: JSON.stringify({
+                              routeId: optimizationResult.optimization_id,
+                              driverId: parseInt(driverId),
+                              orderIds
+                            })
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            toast.success(`Driver assigned to ${orderIds.length} orders in optimized route!`);
+                            // Refresh orders list
+                            const ordersRes = await fetch('http://localhost:3001/api/orders', {
+                              headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (ordersRes.ok) setOrders(await ordersRes.json());
+                          } else {
+                            const err = await res.json();
+                            toast.error(err.error || 'Failed to assign driver to route');
+                          }
+                        } catch (err) {
+                          toast.error('Failed to assign driver to route');
+                        }
+                      }}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Assign to Route
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1536,8 +1649,7 @@ const BusinessOwnerOrders = () => {
                   <div><b>Weight:</b> {selectedOrder.weight} kg</div>
                   <div><b>Size:</b> {selectedOrder.size || 'N/A'}</div>
                   <div><b>Scheduled:</b> {selectedOrder.scheduled_delivery_time ? new Date(selectedOrder.scheduled_delivery_time).toLocaleString() : '—'}</div>
-                  <div><b>Created at:</b> {selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleString() : '—'}</div>
-                  <div><b>Cost:</b> {selectedOrder.cost ? `₱${selectedOrder.cost}` : '—'}</div>
+                  <div><b>Created at:</b> {selectedOrder.order_created_at ? new Date(selectedOrder.order_created_at).toLocaleString() : '—'}</div>
                   <div><b>Delivery Fee:</b> {selectedOrder.delivery_fee ? `₱${Number(selectedOrder.delivery_fee).toFixed(2)}` : '—'}</div>
                   <div><b>Commission:</b> ₱10.00</div>
                 </div>

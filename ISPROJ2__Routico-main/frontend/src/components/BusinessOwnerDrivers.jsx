@@ -49,8 +49,9 @@ const BusinessOwnerDrivers = () => {
       dispatchDriversUpdated(data);
       setError(null);
     } catch (err) {
-      setError('Failed to load drivers');
       console.error(err);
+      setDrivers([]);
+      setError(null);
     } finally {
       setLoading(false);
     }

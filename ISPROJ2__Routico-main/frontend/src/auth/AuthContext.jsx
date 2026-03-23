@@ -12,6 +12,12 @@ export const useAuth = () => {
   return context;
 };
 
+const getDashboardForRole = (role) => {
+  if (role === 'administrator') return 'admin';
+  if (role === 'driver') return 'driver';
+  return 'business';
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -122,7 +128,7 @@ export const AuthProvider = ({ children }) => {
           active_status: data.user.activeStatus
         });
         setUserPermissions(new Set(data.user.permissions || []));
-        setDashboardType(data.user.dashboardType || 'business');
+        setDashboardType(data.user.dashboardType || getDashboardForRole(data.user.role));
 
         // Persist JWT session for page refresh
         sessionStorage.setItem('jwtUser', JSON.stringify({
@@ -132,7 +138,7 @@ export const AuthProvider = ({ children }) => {
           token: data.token,
           accountStatus: data.user.accountStatus,
           activeStatus: data.user.activeStatus,
-          dashboardType: data.user.dashboardType || 'business',
+          dashboardType: data.user.dashboardType || getDashboardForRole(data.user.role),
           permissions: data.user.permissions || []
         }));
 
@@ -180,7 +186,7 @@ export const AuthProvider = ({ children }) => {
           active_status: parsed.activeStatus
         });
         setUserPermissions(new Set(parsed.permissions || []));
-        setDashboardType(parsed.dashboardType || 'business');
+        setDashboardType(parsed.dashboardType || getDashboardForRole(parsed.role));
         setLoading(false);
       } catch (e) {
         console.error('Error parsing stored JWT user:', e);
@@ -207,7 +213,7 @@ export const AuthProvider = ({ children }) => {
               active_status: userData.active_status
             });
             setUserPermissions(new Set(userData.permissions || []));
-            setDashboardType(userData.dashboard_type || 'business');
+            setDashboardType(userData.dashboard_type || getDashboardForRole(userData.role));
           } else {
             console.error('Failed to fetch user data from database');
             setUserRole(null);

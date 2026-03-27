@@ -9,7 +9,10 @@ router.get('/', requirePerm('manage_roles'), async (req, res) => {
 
     const [roles] = await db.query(`
       SELECT r.*,
-        (SELECT COUNT(*) FROM users u WHERE u.role_id = r.role_id) as user_count
+        CASE
+          WHEN r.role_name = 'driver' THEN (SELECT COUNT(*) FROM drivers)
+          ELSE (SELECT COUNT(*) FROM users u WHERE u.role = r.role_name)
+        END as user_count
       FROM roles r
       ORDER BY r.is_system DESC, r.role_name ASC
     `);

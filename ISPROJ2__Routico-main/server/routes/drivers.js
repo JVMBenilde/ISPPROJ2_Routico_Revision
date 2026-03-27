@@ -108,11 +108,17 @@ router.post('/', requirePerm('manage_drivers'), async (req, res) => {
       const rawPassword = `${firstName}${lastName.charAt(0)}`;
       const passwordHash = await bcrypt.hash(rawPassword, 10);
 
+      // Get the driver role_id
+      const [driverRole] = await connection.query(
+        "SELECT role_id FROM roles WHERE role_name = 'driver'"
+      );
+      const driverRoleId = driverRole.length > 0 ? driverRole[0].role_id : null;
+
       // Create user account for driver
       const [userInsert] = await connection.query(
-        `INSERT INTO users (full_name, email, password_hash, phone, account_status, active_status, role, created_at)
-         VALUES (?, ?, ?, ?, 'approved', 'active', 'driver', NOW())`,
-        [`${firstName} ${lastName}`, email, passwordHash, phone || null]
+        `INSERT INTO users (full_name, email, password_hash, phone, account_status, active_status, role, role_id, created_at)
+         VALUES (?, ?, ?, ?, 'approved', 'active', 'driver', ?, NOW())`,
+        [`${firstName} ${lastName}`, email, passwordHash, phone || null, driverRoleId]
       );
       const newUserId = userInsert.insertId;
 

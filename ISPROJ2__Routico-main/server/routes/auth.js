@@ -682,12 +682,6 @@ router.get('/user/:userId/payment-status', requirePerm('view_subscription_paymen
     
     const ownerId = businessOwnerResult[0][0].owner_id;
     
-    // Get current subscription
-    const subscriptionResult = await db.query(
-      'SELECT approval_status, payment_date FROM subscriptions WHERE owner_id = ? ORDER BY payment_date DESC LIMIT 1',
-      [ownerId]
-    );
-    
     // Get current month billing
     const currentMonth = new Date().toISOString().slice(0, 7);
     const billingResult = await db.query(
@@ -697,30 +691,22 @@ router.get('/user/:userId/payment-status', requirePerm('view_subscription_paymen
     
     let status = 'unknown';
     let amount = 0;
-    
-    if (subscriptionResult[0].length > 0) {
-      const subscription = subscriptionResult[0][0];
-      if (subscription.approval_status === 'approved') {
-        status = 'paid';
-        amount = 0; // Free first month
-      } else {
-        status = 'pending';
-        amount = 2000; // Monthly fee
-      }
-    }
-    
+
     if (billingResult[0].length > 0) {
+      // Current month billing exists — use it as the source of truth
       const billing = billingResult[0][0];
       amount = parseFloat(billing.total_due);
-      if (billing.status === 'free') {
-        status = 'paid';
-      } else if (billing.status === 'paid') {
+      if (billing.status === 'free' || billing.status === 'paid') {
         status = 'paid';
       } else {
         status = 'unpaid';
       }
+    } else {
+      // No billing record for current month — not paid for this period
+      status = 'unpaid';
+      amount = 2000;
     }
-    
+
     res.json({ status, amount });
   } catch (error) {
     console.error('Get user payment status error:', error);

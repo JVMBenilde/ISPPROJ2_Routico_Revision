@@ -14,6 +14,8 @@ const { runMigration } = require('./migrations/001_rbac_tables');
 const { runAuditLogMigration } = require('./migrations/002_audit_logs');
 const { runFleetMigration } = require('./migrations/003_fleet_management');
 const { runNameFieldsMigration } = require('./migrations/004_separate_name_fields');
+const { runMechanicsMigration } = require('./migrations/005_mechanics');
+const { runPartnerShopsMigration } = require('./migrations/006_partner_shops');
 const AuditLogService = require('./services/auditLogService');
 const path = require('path');
 
@@ -146,6 +148,20 @@ async function startServer() {
       await runNameFieldsMigration(db);
     } catch (migrationError) {
       console.error('Name fields migration error:', migrationError);
+    }
+
+    // Run mechanics migration
+    try {
+      await runMechanicsMigration(db);
+    } catch (migrationError) {
+      console.error('Mechanics migration error:', migrationError);
+    }
+
+    // Run partner shops migration
+    try {
+      await runPartnerShopsMigration(db);
+    } catch (migrationError) {
+      console.error('Partner shops migration error:', migrationError);
     }
 
     // Initialize audit log service

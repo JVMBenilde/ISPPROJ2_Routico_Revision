@@ -75,8 +75,23 @@ router.post('/', requirePerm('manage_drivers'), async (req, res) => {
   if (!firstName || !lastName) {
     return res.status(400).json({ error: 'First name and last name are required' });
   }
+
+  // Validate name fields (letters, spaces, hyphens, apostrophes only)
+  const nameRegex = /^[a-zA-Z\s'-]+$/;
+  if (!nameRegex.test(firstName)) {
+    return res.status(400).json({ error: 'First name must contain only letters' });
+  }
+  if (!nameRegex.test(lastName)) {
+    return res.status(400).json({ error: 'Last name must contain only letters' });
+  }
   if (!email) {
     return res.status(400).json({ error: 'Email is required for driver login' });
+  }
+
+  // Validate email format
+  const emailRegex = /^[a-zA-Z0-9._%+-]{2,}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address (e.g., name@example.com)' });
   }
 
   try {
@@ -90,6 +105,13 @@ router.post('/', requirePerm('manage_drivers'), async (req, res) => {
     }
 
     const ownerId = ownerResult[0].owner_id;
+
+    // Validate driver phone must be Philippine number (+63)
+    if (phone) {
+      if (!phone.startsWith('+63') || !/^\+63\d{10}$/.test(phone)) {
+        return res.status(400).json({ error: 'Please enter a valid Philippine phone number (e.g., +639171234567)' });
+      }
+    }
 
     // Check if email already exists in users
     const [existingUser] = await db.query(
@@ -116,9 +138,9 @@ router.post('/', requirePerm('manage_drivers'), async (req, res) => {
 
       // Create user account for driver
       const [userInsert] = await connection.query(
-        `INSERT INTO users (full_name, email, password_hash, phone, account_status, active_status, role, role_id, created_at)
-         VALUES (?, ?, ?, ?, 'approved', 'active', 'driver', ?, NOW())`,
-        [`${firstName} ${lastName}`, email, passwordHash, phone || null, driverRoleId]
+        `INSERT INTO users (full_name, first_name, last_name, email, password_hash, phone, account_status, active_status, role, role_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'approved', 'active', 'driver', ?, NOW())`,
+        [`${firstName} ${lastName}`, firstName, lastName, email, passwordHash, phone || null, driverRoleId]
       );
       const newUserId = userInsert.insertId;
 

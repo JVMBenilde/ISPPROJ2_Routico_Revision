@@ -9,8 +9,12 @@ const RegisterPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const countryCode = '+63';
+
   const [formData, setFormData] = useState({
-    fullName: '',
+    firstName: '',
+    lastName: '',
+    middleName: '',
     email: '',
     phone: '',
     password: '',
@@ -45,6 +49,31 @@ const RegisterPage = () => {
     }
 
     // Validation
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (!nameRegex.test(formData.firstName)) {
+      setError('First name must contain only letters');
+      return;
+    }
+    if (!nameRegex.test(formData.lastName)) {
+      setError('Last name must contain only letters');
+      return;
+    }
+    if (formData.middleName && !nameRegex.test(formData.middleName)) {
+      setError('Middle name must contain only letters');
+      return;
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]{2,}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address (e.g., name@example.com)');
+      return;
+    }
+
+    if (!formData.phone || formData.phone.length < 6) {
+      setError('Please enter a valid phone number');
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -62,11 +91,15 @@ const RegisterPage = () => {
 
     setLoading(true);
 
+    const fullPhone = `${countryCode}${formData.phone}`;
+
     try {
       // Register user with improved error handling
       await signUp(formData.email, formData.password, {
-        fullName: formData.fullName,
-        phone: formData.phone,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        middleName: formData.middleName,
+        phone: fullPhone,
         companyDocument: formData.companyDocument
       });
 
@@ -119,17 +152,51 @@ const RegisterPage = () => {
           )}
 
           <form className="space-y-6" onSubmit={handleSubmit}>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="firstName" className="block text-sm font-medium text-gray-300">
+                  First Name
+                </label>
+                <div className="mt-1">
+                  <input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    required
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    className="appearance-none block w-full px-3 py-2 border border-gray-600 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-700 text-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-300">
+                  Last Name
+                </label>
+                <div className="mt-1">
+                  <input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    required
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    className="appearance-none block w-full px-3 py-2 border border-gray-600 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-700 text-white"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div>
-              <label htmlFor="fullName" className="block text-sm font-medium text-gray-300">
-                Full Name
+              <label htmlFor="middleName" className="block text-sm font-medium text-gray-300">
+                Middle Name <span className="text-gray-500">(Optional)</span>
               </label>
               <div className="mt-1">
                 <input
-                  id="fullName"
-                  name="fullName"
+                  id="middleName"
+                  name="middleName"
                   type="text"
-                  required
-                  value={formData.fullName}
+                  value={formData.middleName}
                   onChange={handleInputChange}
                   className="appearance-none block w-full px-3 py-2 border border-gray-600 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-700 text-white"
                 />
@@ -158,12 +225,16 @@ const RegisterPage = () => {
               <label htmlFor="phone" className="block text-sm font-medium text-gray-300">
                 Phone Number
               </label>
-              <div className="mt-1">
+              <div className="mt-1 flex gap-2">
+                <span className="inline-flex items-center px-3 py-2 border border-gray-600 rounded-md bg-gray-600 text-gray-300 sm:text-sm">
+                  +63
+                </span>
                 <input
                   id="phone"
                   name="phone"
                   type="tel"
                   required
+                  placeholder="9171234567"
                   value={formData.phone}
                   onChange={handleInputChange}
                   className="appearance-none block w-full px-3 py-2 border border-gray-600 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-700 text-white"

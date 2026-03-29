@@ -30,10 +30,12 @@ const createAdminUser = async () => {
     } else {
       // Insert admin user
       const [result] = await connection.execute(`
-        INSERT INTO users (full_name, email, password_hash, phone, account_status, active_status, role, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+        INSERT INTO users (full_name, first_name, last_name, email, password_hash, phone, account_status, active_status, role, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
       `, [
         'Routico Administrator',
+        'Routico',
+        'Administrator',
         'admin@routico.com',
         passwordHash,
         '09123456789',

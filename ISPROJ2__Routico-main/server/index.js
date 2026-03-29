@@ -13,6 +13,7 @@ const PermissionCacheService = require('./services/permissionCacheService');
 const { runMigration } = require('./migrations/001_rbac_tables');
 const { runAuditLogMigration } = require('./migrations/002_audit_logs');
 const { runFleetMigration } = require('./migrations/003_fleet_management');
+const { runNameFieldsMigration } = require('./migrations/004_separate_name_fields');
 const AuditLogService = require('./services/auditLogService');
 const path = require('path');
 
@@ -138,6 +139,13 @@ async function startServer() {
       await runFleetMigration(db);
     } catch (migrationError) {
       console.error('Fleet management migration error:', migrationError);
+    }
+
+    // Run name fields migration
+    try {
+      await runNameFieldsMigration(db);
+    } catch (migrationError) {
+      console.error('Name fields migration error:', migrationError);
     }
 
     // Initialize audit log service

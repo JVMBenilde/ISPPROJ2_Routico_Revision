@@ -22,6 +22,7 @@ const BusinessOwnerDrivers = () => {
   });
   const [createdCredentials, setCreatedCredentials] = useState(null);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const countryCode = '+63';
 
   useEffect(() => {
     if (user) {
@@ -71,6 +72,27 @@ const BusinessOwnerDrivers = () => {
       return;
     }
 
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (!nameRegex.test(formData.firstName)) {
+      toast.warning('First name must contain only letters');
+      return;
+    }
+    if (!nameRegex.test(formData.lastName)) {
+      toast.warning('Last name must contain only letters');
+      return;
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]{2,}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.warning('Please enter a valid email address (e.g., name@example.com)');
+      return;
+    }
+
+    if (formData.phone.length < 6) {
+      toast.warning('Please enter a valid phone number');
+      return;
+    }
+
     try {
       const headers = await getAuthHeaders();
 
@@ -98,6 +120,7 @@ const BusinessOwnerDrivers = () => {
         toast.success('Driver updated successfully');
       } else {
         // Create new driver
+        const fullPhone = `${countryCode}${formData.phone}`;
         const response = await fetch('http://localhost:3001/api/drivers', {
           method: 'POST',
           headers,
@@ -105,7 +128,7 @@ const BusinessOwnerDrivers = () => {
             firstName: formData.firstName,
             lastName: formData.lastName,
             email: formData.email,
-            phone: formData.phone,
+            phone: fullPhone,
             licenseNumber: formData.licenseNumber,
             licenseExpiry: formData.licenseExpiry || null
           })
@@ -298,14 +321,20 @@ const BusinessOwnerDrivers = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Phone *</label>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="09XX-XXX-XXXX"
-              />
+              <div className="flex gap-2">
+                <span className="inline-flex items-center px-3 py-2 border border-gray-600 rounded-md bg-gray-600 text-gray-300 sm:text-sm">
+                  +63
+                </span>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="9171234567"
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-400">Philippine phone numbers only (+63)</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">License Number</label>

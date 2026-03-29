@@ -17,22 +17,24 @@ class RegistrationService {
    * @returns {Promise<Object>} - Registration result
    */
   async registerBusinessOwner(userData, fileData = null) {
-    const { fullName, email, phone, password, firebase_uid } = userData;
+    const { firstName, lastName, middleName, email, phone, password } = userData;
+    const fullName = middleName
+      ? `${firstName} ${middleName} ${lastName}`
+      : `${firstName} ${lastName}`;
     
+    let documentKey = null;
+    let documentBuffer = null;
+    let documentMetadata = null;
+
     // Start database transaction
     await this.db.query('START TRANSACTION');
-    
+
     try {
       // Step 1: Validate input data
       await this.validateRegistrationData(userData);
-      
+
       // Step 2: Check for existing users
       await this.checkExistingUser(email);
-      
-      // Step 3: Store document metadata temporarily (will update with userId after user creation)
-      let documentKey = null;
-      let documentBuffer = null;
-      let documentMetadata = null;
       if (fileData) {
         documentBuffer = fileData.buffer;
         documentMetadata = {
@@ -55,11 +57,14 @@ class RegistrationService {
       // Step 6: Insert user into database
       const result = await this.db.query(
         `INSERT INTO users (
-          full_name, email, password_hash, phone, account_status,
+          full_name, first_name, last_name, middle_name, email, password_hash, phone, account_status,
           active_status, role, role_id, created_at
-        ) VALUES (?, ?, ?, ?, 'pending', 'inactive', 'business_owner', ?, NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'inactive', 'business_owner', ?, NOW())`,
         [
           fullName,
+          firstName,
+          lastName,
+          middleName || null,
           email,
           passwordHash,
           phone,
@@ -131,24 +136,34 @@ class RegistrationService {
    * @param {Object} userData - User data to validate
    */
   async validateRegistrationData(userData) {
-    const { fullName, email, phone, password } = userData;
-    
+    const { firstName, lastName, email, phone, password } = userData;
+
     // Check required fields
-    if (!fullName || !email || !phone || !password) {
+    if (!firstName || !lastName || !email || !phone || !password) {
       throw new Error('All fields are required');
     }
-    
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      throw new Error('Please enter a valid email address');
+
+    // Validate name fields (letters, spaces, hyphens, apostrophes only)
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (!nameRegex.test(firstName)) {
+      throw new Error('First name must contain only letters');
+    }
+    if (!nameRegex.test(lastName)) {
+      throw new Error('Last name must contain only letters');
+    }
+    if (userData.middleName && !nameRegex.test(userData.middleName)) {
+      throw new Error('Middle name must contain only letters');
     }
     
-    // Validate phone format (more flexible for international numbers)
-    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-    const phoneRegex = /^[\+]?[0-9][0-9]*$/;
-    if (!phoneRegex.test(cleanPhone) || cleanPhone.length < 8 || cleanPhone.length > 16) {
-      throw new Error('Please enter a valid phone number (8-16 digits)');
+    // Validate email format (must have 2+ chars before @, valid domain, 2+ char TLD)
+    const emailRegex = /^[a-zA-Z0-9._%+-]{2,}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      throw new Error('Please enter a valid email address (e.g., name@example.com)');
+    }
+
+    // Validate phone format (must be Philippine number: +63 followed by 10 digits)
+    if (!/^\+63\d{10}$/.test(phone)) {
+      throw new Error('Please enter a valid Philippine phone number (e.g., +639171234567)');
     }
     
     // Validate password strength

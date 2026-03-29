@@ -37,11 +37,11 @@ router.post('/register', upload.single('companyDocument'), async (req, res) => {
   const registrationService = new RegistrationService(db);
   
   try {
-    const { fullName, email, phone, password } = req.body;
-    
+    const { firstName, lastName, middleName, email, phone, password } = req.body;
+
     // Use registration service for data integrity
     const result = await registrationService.registerBusinessOwner(
-      { fullName, email, phone, password },
+      { firstName, lastName, middleName, email, phone, password },
       req.file
     );
 

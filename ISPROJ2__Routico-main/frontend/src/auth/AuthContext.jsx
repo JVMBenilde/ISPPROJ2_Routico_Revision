@@ -44,7 +44,11 @@ export const AuthProvider = ({ children }) => {
       // Step 2: Create user in MySQL database
       console.log('Step 2: Creating MySQL user...');
       const formData = new FormData();
-      formData.append('fullName', userData.fullName);
+      formData.append('firstName', userData.firstName);
+      formData.append('lastName', userData.lastName);
+      if (userData.middleName) {
+        formData.append('middleName', userData.middleName);
+      }
       formData.append('email', email);
       formData.append('phone', userData.phone);
       formData.append('password', password);

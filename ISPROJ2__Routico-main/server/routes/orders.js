@@ -93,6 +93,17 @@ router.post('/', requirePerm('create_orders'), async (req, res) => {
 
     console.log('Received order data:', req.body);
 
+    // Validate addresses
+    if (!pickupAddress || pickupAddress.trim().length < 5) {
+      return res.status(400).json({ error: 'Please enter a valid pickup address' });
+    }
+    if (!deliveryAddress || deliveryAddress.trim().length < 5) {
+      return res.status(400).json({ error: 'Please enter a valid delivery address' });
+    }
+    if (pickupAddress.trim() === deliveryAddress.trim()) {
+      return res.status(400).json({ error: 'Pickup and delivery addresses cannot be the same' });
+    }
+
     // Get the owner_id for this user
     const [ownerResult] = await db.query(
       'SELECT owner_id FROM businessowners WHERE user_id = ?',

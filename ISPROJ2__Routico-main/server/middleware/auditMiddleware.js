@@ -8,20 +8,49 @@ const routeDescriptions = {
   'POST /api/auth/admin/login': { action: 'admin_login', category: 'auth', description: 'Admin/Driver login' },
   'PUT /api/auth/user/:userId/status': { action: 'update_user_status', category: 'users', description: 'Updated user account status' },
   'PUT /api/auth/user/:userId/active-status': { action: 'update_active_status', category: 'users', description: 'Updated user active status' },
+  'PUT /api/auth/user/:userId/suspend': { action: 'suspend_user', category: 'users', description: 'Suspended a user account' },
+  'PUT /api/auth/user/:userId/reactivate': { action: 'reactivate_user', category: 'users', description: 'Reactivated a user account' },
+  'PUT /api/auth/user/:userId/reset-password': { action: 'reset_user_password', category: 'users', description: 'Reset user password' },
+  'PUT /api/auth/driver/:driverId/reset-password': { action: 'reset_driver_password', category: 'drivers', description: 'Reset driver password' },
+  'PUT /api/auth/driver/change-password': { action: 'driver_change_password', category: 'auth', description: 'Driver changed their password' },
   'DELETE /api/auth/user/:userId': { action: 'delete_user', category: 'users', description: 'Deleted a user' },
-  'POST /api/auth/admin/billing-statements/bulk-suspend': { action: 'bulk_suspend', category: 'billing', description: 'Bulk suspended accounts' },
+  'POST /api/auth/admin/billing-statements/bulk-suspend': { action: 'bulk_suspend', category: 'billing', description: 'Bulk suspended overdue accounts' },
+  'POST /api/auth/admin/billing-statements/generate': { action: 'generate_billing', category: 'billing', description: 'Generated monthly billing statements' },
+  'POST /api/auth/admin/billing-statements/:statementId/approve': { action: 'approve_payment', category: 'billing', description: 'Approved a payment submission' },
+  'POST /api/auth/billing-statements/:statementId/payment-proof': { action: 'upload_payment_proof', category: 'billing', description: 'Uploaded payment proof for billing' },
+  'POST /api/auth/subscription/payment-proof': { action: 'upload_subscription_proof', category: 'billing', description: 'Uploaded subscription payment proof' },
 
   // Orders
-  'POST /api/orders': { action: 'create_order', category: 'orders', description: 'Created a new order' },
-  'PUT /api/orders/:orderId': { action: 'update_order', category: 'orders', description: 'Updated an order' },
-  'PUT /api/orders/:orderId/status': { action: 'update_order_status', category: 'orders', description: 'Updated order status' },
-  'PUT /api/orders/:orderId/assign': { action: 'assign_order', category: 'orders', description: 'Assigned order to driver' },
-  'DELETE /api/orders/:orderId': { action: 'delete_order', category: 'orders', description: 'Deleted an order' },
+  'POST /api/orders': { action: 'create_order', category: 'orders', description: 'Created a new delivery order' },
+  'PUT /api/orders/:orderId': { action: 'update_order', category: 'orders', description: 'Updated order details' },
+  'PUT /api/orders/:orderId/status': { action: 'update_order_status', category: 'orders', description: 'Changed order delivery status' },
+  'PUT /api/orders/:orderId/assign': { action: 'assign_order', category: 'orders', description: 'Assigned a driver to an order' },
+  'DELETE /api/orders/:orderId': { action: 'delete_order', category: 'orders', description: 'Deleted a delivery order' },
 
   // Drivers
-  'POST /api/drivers': { action: 'create_driver', category: 'drivers', description: 'Created a new driver' },
-  'PUT /api/drivers/:driverId': { action: 'update_driver', category: 'drivers', description: 'Updated driver info' },
-  'DELETE /api/drivers/:driverId': { action: 'delete_driver', category: 'drivers', description: 'Deleted a driver' },
+  'POST /api/drivers': { action: 'create_driver', category: 'drivers', description: 'Added a new driver' },
+  'PUT /api/drivers/:driverId': { action: 'update_driver', category: 'drivers', description: 'Updated driver information' },
+  'PUT /api/drivers/:driverId/status': { action: 'update_driver_status', category: 'drivers', description: 'Changed driver status' },
+  'DELETE /api/drivers/:driverId': { action: 'delete_driver', category: 'drivers', description: 'Removed a driver' },
+
+  // Vehicles & Fleet
+  'POST /api/vehicles': { action: 'add_vehicle', category: 'fleet', description: 'Added a new vehicle' },
+  'PUT /api/vehicles/:truckId': { action: 'update_vehicle', category: 'fleet', description: 'Updated vehicle details' },
+  'PUT /api/vehicles/:truckId/assign-driver': { action: 'assign_vehicle_driver', category: 'fleet', description: 'Assigned a driver to a vehicle' },
+  'DELETE /api/vehicles/:truckId': { action: 'delete_vehicle', category: 'fleet', description: 'Removed a vehicle' },
+
+  // Maintenance
+  'POST /api/vehicles/:truckId/maintenance': { action: 'add_maintenance', category: 'fleet', description: 'Added a maintenance record' },
+  'PUT /api/vehicles/maintenance/:maintenanceId': { action: 'update_maintenance', category: 'fleet', description: 'Updated maintenance record status' },
+  'DELETE /api/vehicles/maintenance/:maintenanceId': { action: 'delete_maintenance', category: 'fleet', description: 'Deleted a maintenance record' },
+
+  // Mechanics
+  'POST /api/vehicles/mechanics': { action: 'add_mechanic', category: 'fleet', description: 'Added an in-house mechanic' },
+  'DELETE /api/vehicles/mechanics/:mechanicId': { action: 'remove_mechanic', category: 'fleet', description: 'Removed an in-house mechanic' },
+
+  // Partner Shops
+  'POST /api/vehicles/partner-shops': { action: 'add_partner_shop', category: 'fleet', description: 'Added a partner repair shop' },
+  'DELETE /api/vehicles/partner-shops/:shopId': { action: 'remove_partner_shop', category: 'fleet', description: 'Removed a partner repair shop' },
 
   // Billing
   'POST /api/billing/upload-payment': { action: 'upload_payment', category: 'billing', description: 'Uploaded payment proof' },
@@ -29,23 +58,28 @@ const routeDescriptions = {
 
   // Routes
   'POST /api/routes/optimize': { action: 'optimize_routes', category: 'routes', description: 'Ran route optimization' },
+  'POST /api/routes/assign-driver': { action: 'assign_route_driver', category: 'routes', description: 'Assigned a driver to optimized route' },
 
   // Tracking
-  'PUT /api/tracking/:orderId': { action: 'update_tracking', category: 'tracking', description: 'Updated tracking status' },
+  'POST /api/tracking/:orderId/update-status': { action: 'update_tracking', category: 'tracking', description: 'Updated delivery tracking status' },
 
   // Issues
-  'POST /api/issues': { action: 'create_issue', category: 'issues', description: 'Created a new issue' },
-  'PUT /api/issues/:issueId': { action: 'update_issue', category: 'issues', description: 'Updated an issue' },
+  'POST /api/issues': { action: 'create_issue', category: 'issues', description: 'Reported a new issue' },
+  'PUT /api/issues/:issueId/status': { action: 'update_issue_status', category: 'issues', description: 'Updated issue status' },
 
   // Roles
   'POST /api/roles': { action: 'create_role', category: 'roles', description: 'Created a new role' },
-  'PUT /api/roles/:roleId': { action: 'update_role', category: 'roles', description: 'Updated a role' },
+  'PUT /api/roles/:roleId': { action: 'update_role', category: 'roles', description: 'Updated role details' },
   'DELETE /api/roles/:roleId': { action: 'delete_role', category: 'roles', description: 'Deleted a role' },
   'PUT /api/roles/:roleId/permissions': { action: 'update_role_permissions', category: 'roles', description: 'Updated role permissions' },
-  'PUT /api/roles/users/:userId/role': { action: 'assign_user_role', category: 'roles', description: 'Assigned role to user' },
+  'PUT /api/roles/users/:userId/role': { action: 'assign_user_role', category: 'roles', description: 'Assigned a role to user' },
+
+  // Stripe
+  'POST /api/stripe/create-checkout-session': { action: 'create_payment_session', category: 'billing', description: 'Started online payment checkout' },
+  'POST /api/stripe/webhook': { action: 'stripe_webhook', category: 'billing', description: 'Processed payment webhook' },
 
   // AI Analytics
-  'POST /api/ai-analytics/predict': { action: 'ai_prediction', category: 'analytics', description: 'Ran AI prediction' },
+  'POST /api/ai-analytics/predict': { action: 'ai_prediction', category: 'analytics', description: 'Generated AI business insights' },
 };
 
 // Match a request against the route patterns

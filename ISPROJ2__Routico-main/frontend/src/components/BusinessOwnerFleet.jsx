@@ -25,6 +25,16 @@ const BusinessOwnerFleet = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [mechanics, setMechanics] = useState([]);
+  const [partnerShops, setPartnerShops] = useState([]);
+  const [showMechanicsModal, setShowMechanicsModal] = useState(false);
+  const [showShopsModal, setShowShopsModal] = useState(false);
+  const [newMechanicName, setNewMechanicName] = useState('');
+  const [newMechanicPhone, setNewMechanicPhone] = useState('');
+  const [newShopName, setNewShopName] = useState('');
+  const [newShopAddress, setNewShopAddress] = useState('');
+  const [newShopPhone, setNewShopPhone] = useState('');
+  const [performedByType, setPerformedByType] = useState('');
 
   // Vehicle form state
   const [vehicleForm, setVehicleForm] = useState({
@@ -65,14 +75,32 @@ const BusinessOwnerFleet = () => {
     }
   }, [headers]);
 
+  const fetchMechanics = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/vehicles/mechanics`, { headers: headers() });
+      if (res.ok) setMechanics(await res.json());
+    } catch (err) {
+      console.error('Error fetching mechanics:', err);
+    }
+  }, [headers]);
+
+  const fetchPartnerShops = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/vehicles/partner-shops`, { headers: headers() });
+      if (res.ok) setPartnerShops(await res.json());
+    } catch (err) {
+      console.error('Error fetching partner shops:', err);
+    }
+  }, [headers]);
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchVehicles(), fetchDrivers()]);
+      await Promise.all([fetchVehicles(), fetchDrivers(), fetchMechanics(), fetchPartnerShops()]);
       setLoading(false);
     };
     loadData();
-  }, [fetchVehicles, fetchDrivers]);
+  }, [fetchVehicles, fetchDrivers, fetchMechanics, fetchPartnerShops]);
 
   const openAddModal = () => {
     setModalMode('add');
@@ -158,8 +186,76 @@ const BusinessOwnerFleet = () => {
     }
   };
 
+  const handleAddMechanic = async () => {
+    if (!newMechanicName.trim()) { toast.warning('Please enter a mechanic name'); return; }
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (!nameRegex.test(newMechanicName.trim())) { toast.warning('Mechanic name must contain only letters'); return; }
+    if (!newMechanicPhone.trim()) { toast.warning('Please enter a phone number'); return; }
+    if (!/^\+63\d{10}$/.test(newMechanicPhone.trim())) { toast.warning('Please enter a valid Philippine phone number (e.g., +639171234567)'); return; }
+    try {
+      const res = await fetch(`${API_BASE}/vehicles/mechanics`, {
+        method: 'POST', headers: headers(), body: JSON.stringify({ name: newMechanicName.trim(), phone: newMechanicPhone.trim() || null })
+      });
+      if (res.ok) {
+        await fetchMechanics();
+        setNewMechanicName('');
+        setNewMechanicPhone('');
+        toast.success('Mechanic added');
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to add mechanic');
+      }
+    } catch (err) { toast.error('Failed to add mechanic'); }
+  };
+
+  const handleDeleteMechanic = async (mechanicId) => {
+    if (!(await confirm('Remove this mechanic?'))) return;
+    try {
+      const res = await fetch(`${API_BASE}/vehicles/mechanics/${mechanicId}`, { method: 'DELETE', headers: headers() });
+      if (res.ok) {
+        await fetchMechanics();
+        toast.success('Mechanic removed');
+      }
+    } catch (err) { toast.error('Failed to remove mechanic'); }
+  };
+
+  const handleAddShop = async () => {
+    if (!newShopName.trim()) { toast.warning('Please enter a shop name'); return; }
+    const shopNameRegex = /^[a-zA-Z0-9\s'.\-&]+$/;
+    if (!shopNameRegex.test(newShopName.trim())) { toast.warning('Shop name contains invalid characters'); return; }
+    if (!newShopAddress.trim()) { toast.warning('Please enter a shop address'); return; }
+    if (!newShopPhone.trim()) { toast.warning('Please enter a phone number'); return; }
+    if (!/^\+63\d{10}$/.test(newShopPhone.trim())) { toast.warning('Please enter a valid Philippine phone number (e.g., +639171234567)'); return; }
+    try {
+      const res = await fetch(`${API_BASE}/vehicles/partner-shops`, {
+        method: 'POST', headers: headers(),
+        body: JSON.stringify({ name: newShopName.trim(), address: newShopAddress.trim() || null, phone: newShopPhone.trim() || null })
+      });
+      if (res.ok) {
+        await fetchPartnerShops();
+        setNewShopName(''); setNewShopAddress(''); setNewShopPhone('');
+        toast.success('Partner shop added');
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to add shop');
+      }
+    } catch (err) { toast.error('Failed to add partner shop'); }
+  };
+
+  const handleDeleteShop = async (shopId) => {
+    if (!(await confirm('Remove this partner shop?'))) return;
+    try {
+      const res = await fetch(`${API_BASE}/vehicles/partner-shops/${shopId}`, { method: 'DELETE', headers: headers() });
+      if (res.ok) {
+        await fetchPartnerShops();
+        toast.success('Partner shop removed');
+      }
+    } catch (err) { toast.error('Failed to remove partner shop'); }
+  };
+
   const openMaintenanceModal = async (vehicle) => {
     setSelectedVehicle(vehicle);
+    setPerformedByType('');
     setMaintenanceForm({
       maintenance_type: 'Oil Change', description: '', cost: '',
       maintenance_date: new Date().toISOString().split('T')[0],
@@ -188,11 +284,28 @@ const BusinessOwnerFleet = () => {
           maintenance_date: new Date().toISOString().split('T')[0],
           next_due_date: '', mileage_at_service: '', performed_by: '', status: 'scheduled'
         });
+        setPerformedByType('');
         fetchVehicles();
         toast.success('Maintenance record added');
       }
     } catch (err) {
       toast.error('Failed to save maintenance record');
+    }
+  };
+
+  const handleUpdateMaintenanceStatus = async (maintenanceId, newStatus) => {
+    try {
+      const res = await fetch(`${API_BASE}/vehicles/maintenance/${maintenanceId}`, {
+        method: 'PUT', headers: headers(),
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        setMaintenanceRecords(prev => prev.map(r => r.maintenance_id === maintenanceId ? { ...r, status: newStatus } : r));
+        fetchVehicles();
+        toast.success(`Status updated to ${newStatus}`);
+      }
+    } catch (err) {
+      toast.error('Failed to update status');
     }
   };
 
@@ -398,6 +511,18 @@ const BusinessOwnerFleet = () => {
               ))}
             </select>
           </div>
+          <button
+            onClick={() => setShowShopsModal(true)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors border border-gray-600"
+          >
+            Partner Shops
+          </button>
+          <button
+            onClick={() => setShowMechanicsModal(true)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors border border-gray-600"
+          >
+            Mechanics
+          </button>
           <button
             onClick={openAddModal}
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
@@ -724,8 +849,28 @@ const BusinessOwnerFleet = () => {
                       <input type="number" value={maintenanceForm.mileage_at_service} onChange={e => setMaintenanceForm(f => ({...f, mileage_at_service: e.target.value}))} className={inputClass} />
                     </div>
                     <div>
-                      <label className={labelClass}>Performed By</label>
-                      <input type="text" value={maintenanceForm.performed_by} onChange={e => setMaintenanceForm(f => ({...f, performed_by: e.target.value}))} className={inputClass} placeholder="Mechanic / Shop name" />
+                      <label className={labelClass}>Performed By — Type</label>
+                      <select value={performedByType} onChange={e => { setPerformedByType(e.target.value); setMaintenanceForm(f => ({...f, performed_by: ''})); }} className={inputClass}>
+                        <option value="">Select type...</option>
+                        <option value="partner_shop">Partner Shop</option>
+                        <option value="in_house">In-house Mechanic</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Performed By — Name</label>
+                      {performedByType === 'partner_shop' ? (
+                        <select value={maintenanceForm.performed_by} onChange={e => setMaintenanceForm(f => ({...f, performed_by: e.target.value}))} className={inputClass}>
+                          <option value="">Select a shop...</option>
+                          {partnerShops.filter(s => s.status === 'active').map(s => <option key={s.shop_id} value={s.name}>{s.name}</option>)}
+                        </select>
+                      ) : performedByType === 'in_house' ? (
+                        <select value={maintenanceForm.performed_by} onChange={e => setMaintenanceForm(f => ({...f, performed_by: e.target.value}))} className={inputClass}>
+                          <option value="">Select a mechanic...</option>
+                          {mechanics.filter(m => m.status === 'active').map(m => <option key={m.mechanic_id} value={m.name}>{m.name}</option>)}
+                        </select>
+                      ) : (
+                        <select disabled className={inputClass}><option>Select a type first...</option></select>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -746,28 +891,143 @@ const BusinessOwnerFleet = () => {
                 ) : (
                   <div className="space-y-2">
                     {maintenanceRecords.map(record => (
-                      <div key={record.maintenance_id} className="flex items-center justify-between bg-gray-800/30 rounded-lg px-4 py-3">
-                        <div className="flex-1">
+                      <div key={record.maintenance_id} className="bg-gray-800/30 rounded-lg px-4 py-3">
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-white">{record.maintenance_type}</span>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${getMaintenanceStatusColor(record.status)}`}>
-                              {record.status}
-                            </span>
                           </div>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                            <span>{new Date(record.maintenance_date).toLocaleDateString()}</span>
-                            {record.cost > 0 && <span>P{Number(record.cost).toLocaleString()}</span>}
-                            {record.performed_by && <span>{record.performed_by}</span>}
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={record.status}
+                              onChange={e => handleUpdateMaintenanceStatus(record.maintenance_id, e.target.value)}
+                              className="px-3 py-1 rounded-lg text-xs font-medium border border-gray-600 bg-gray-700 text-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="scheduled" className="bg-gray-800 text-yellow-400">Scheduled</option>
+                              <option value="in_progress" className="bg-gray-800 text-blue-400">In Progress</option>
+                              <option value="completed" className="bg-gray-800 text-green-400">Completed</option>
+                              <option value="cancelled" className="bg-gray-800 text-red-400">Cancelled</option>
+                            </select>
+                            <button onClick={() => handleDeleteMaintenance(record.maintenance_id)} className="text-red-400 hover:text-red-300">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
                           </div>
-                          {record.description && <p className="text-xs text-gray-400 mt-1">{record.description}</p>}
                         </div>
-                        <button onClick={() => handleDeleteMaintenance(record.maintenance_id)} className="ml-3 text-red-400 hover:text-red-300">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                          <span>{new Date(record.maintenance_date).toLocaleDateString()}</span>
+                          {record.cost > 0 && <span>₱{Number(record.cost).toLocaleString()}</span>}
+                          {record.mileage_at_service > 0 && <span>{Number(record.mileage_at_service).toLocaleString()} km</span>}
+                        </div>
+                        {record.performed_by && (
+                          <div className="mt-1 text-xs text-blue-400">
+                            Performed by: {record.performed_by}
+                          </div>
+                        )}
+                        {record.description && <p className="text-xs text-gray-400 mt-1">{record.description}</p>}
                       </div>
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Manage Partner Shops Modal */}
+      {showShopsModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h3 className="text-lg font-bold text-white">Manage Partner Shops</h3>
+              <button onClick={() => setShowShopsModal(false)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* Add new shop */}
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newShopName}
+                  onChange={e => setNewShopName(e.target.value)}
+                  placeholder="Shop name"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newShopAddress}
+                    onChange={e => setNewShopAddress(e.target.value)}
+                    placeholder="Address"
+                    className="flex-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <input
+                    type="tel"
+                    value={newShopPhone}
+                    onChange={e => setNewShopPhone(e.target.value)}
+                    placeholder="Phone (+639XXXXXXXXX)"
+                    className="w-36 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button onClick={handleAddShop} className="w-full px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">Add Shop</button>
+              </div>
+              {/* Shops list */}
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {partnerShops.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">No partner shops added yet.</p>
+                ) : partnerShops.map(s => (
+                  <div key={s.shop_id} className="flex items-center justify-between bg-gray-700/50 rounded-lg px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium text-white">{s.name}</p>
+                      {s.address && <p className="text-xs text-gray-400">{s.address}</p>}
+                      {s.phone && <p className="text-xs text-gray-400">{s.phone}</p>}
+                    </div>
+                    <button onClick={() => handleDeleteShop(s.shop_id)} className="text-red-400 hover:text-red-300 text-sm">Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Mechanics Modal */}
+      {showMechanicsModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h3 className="text-lg font-bold text-white">Manage In-house Mechanics</h3>
+              <button onClick={() => setShowMechanicsModal(false)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* Add new mechanic */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newMechanicName}
+                  onChange={e => setNewMechanicName(e.target.value)}
+                  placeholder="Mechanic name"
+                  className="flex-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="tel"
+                  value={newMechanicPhone}
+                  onChange={e => setNewMechanicPhone(e.target.value)}
+                  placeholder="Phone (+639XXXXXXXXX)"
+                  className="w-36 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button onClick={handleAddMechanic} className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">Add</button>
+              </div>
+              {/* Mechanics list */}
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {mechanics.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">No mechanics added yet.</p>
+                ) : mechanics.map(m => (
+                  <div key={m.mechanic_id} className="flex items-center justify-between bg-gray-700/50 rounded-lg px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium text-white">{m.name}</p>
+                      {m.phone && <p className="text-xs text-gray-400">{m.phone}</p>}
+                    </div>
+                    <button onClick={() => handleDeleteMechanic(m.mechanic_id)} className="text-red-400 hover:text-red-300 text-sm">Remove</button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

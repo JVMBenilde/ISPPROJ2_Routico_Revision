@@ -58,9 +58,12 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
 
     const fullAddress = parts.filter(Boolean).join(', ');
 
-    // Only update if we have at least city selected
-    if (city) {
+    // Only update if we have at least city selected and street is valid
+    if (city && (!street.trim() || streetRegex.test(street.trim()))) {
       onChange(fullAddress);
+    } else if (city && street.trim() && !streetRegex.test(street.trim())) {
+      // Invalid street characters — clear the address so form can't submit
+      onChange('');
     } else {
       onChange('');
       onLocationResolved(null);
@@ -142,29 +145,54 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
         if (status === 'OK' && results[0]) {
           const loc = results[0].geometry.location;
           const resolved = { lat: loc.lat(), lng: loc.lng() };
+          const formattedAddress = results[0].formatted_address.toLowerCase();
+          const streetWords = street.trim().toLowerCase().split(/\s+/).filter(w => w.length > 2);
 
-          // Safety check: if result is too far from barangay (>5km), use barangay location instead
+          // Check if the key words from the typed street appear in Google's result
+          // This handles abbreviations like "Avenue" vs "Ave", "Street" vs "St"
+          const mainWord = streetWords.length > 0 ? streetWords[0] : street.trim().toLowerCase();
+          if (!formattedAddress.includes(mainWord)) {
+            setStreetError('Street not found on Google Maps. Please enter a valid street name.');
+            onLocationResolved(barangayLocationRef.current || resolved);
+            return;
+          }
+
+          // Safety check: if result is too far from barangay (>5km), street is invalid
           if (barangayLocationRef.current) {
             const dist = Math.sqrt(
               Math.pow((resolved.lat - barangayLocationRef.current.lat) * 111, 2) +
               Math.pow((resolved.lng - barangayLocationRef.current.lng) * 111 * Math.cos(resolved.lat * Math.PI / 180), 2)
             );
             if (dist > 5) {
-              // Street geocode went too far, fall back to barangay location
+              setStreetError('Street not found in this area. Please check the street name.');
               onLocationResolved(barangayLocationRef.current);
               return;
             }
           }
 
+          setStreetError('');
           onLocationResolved(resolved);
         } else if (barangayLocationRef.current) {
-          // Geocode failed, fall back to barangay location
+          // Geocode failed — street not recognized
           setIsGeocoding(false);
+          setStreetError('Street not found on Google Maps. Please enter a valid street name.');
           onLocationResolved(barangayLocationRef.current);
         }
       });
     }, 500);
   }, [street, barangay, city, province, region]);
+
+  const [streetError, setStreetError] = useState('');
+  const streetRegex = /^[a-zA-Z0-9\s.,#\-\/]+$/;
+
+  const handleStreetChange = (val) => {
+    setStreet(val);
+    if (val.trim() && !streetRegex.test(val.trim())) {
+      setStreetError('Street name contains invalid characters. Use only letters, numbers, spaces, and common punctuation.');
+    } else {
+      setStreetError('');
+    }
+  };
 
   const selectClass = "w-full px-3 py-2 border border-gray-600 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-gray-700 text-white appearance-none cursor-pointer";
   const labelClass = "block text-xs font-medium text-gray-400 mb-1.5";
@@ -264,7 +292,7 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
           {barangay && streetOptions.length > 0 && (
             <select
               value={streetOptions.includes(street) ? street : ''}
-              onChange={(e) => setStreet(e.target.value)}
+              onChange={(e) => handleStreetChange(e.target.value)}
               className={`${selectClass} mb-1.5`}
             >
               <option value="">Pick a street or type below</option>
@@ -276,11 +304,12 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
           <input
             type="text"
             value={street}
-            onChange={(e) => setStreet(e.target.value)}
+            onChange={(e) => handleStreetChange(e.target.value)}
             disabled={!barangay}
             placeholder={barangay ? 'Type street name if not listed' : 'Select barangay first'}
-            className={`${selectClass} ${!barangay ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`${selectClass} ${!barangay ? 'opacity-50 cursor-not-allowed' : ''} ${streetError ? 'border-red-500' : ''}`}
           />
+          {streetError && <p className="text-xs text-red-400 mt-1">{streetError}</p>}
         </div>
       </div>
 

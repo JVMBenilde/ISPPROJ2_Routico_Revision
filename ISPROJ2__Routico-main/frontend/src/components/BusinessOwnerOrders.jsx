@@ -581,12 +581,28 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!formData.customerPhone || !/^\d{10}$/.test(formData.customerPhone)) {
+      toast.error('Please enter a valid 10-digit Philippine phone number');
+      return;
+    }
     if (!formData.pickupAddress) {
       toast.error('Please complete the pickup address (select at least region, province, and city).');
       return;
     }
     if (!formData.dropoffAddress) {
       toast.error('Please complete the dropoff address (select at least region, province, and city).');
+      return;
+    }
+    if (!formData.pickupLocation || !formData.pickupLocation.lat) {
+      toast.error('Pickup address could not be verified. Please select a valid address with at least a city.');
+      return;
+    }
+    if (!formData.dropoffLocation || !formData.dropoffLocation.lat) {
+      toast.error('Delivery address could not be verified. Please select a valid address with at least a city.');
+      return;
+    }
+    if (formData.pickupAddress === formData.dropoffAddress) {
+      toast.error('Pickup and delivery addresses cannot be the same.');
       return;
     }
 
@@ -598,7 +614,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
       // Prepare data matching database schema
       const orderData = {
         customerName: formData.customerName,
-        customerPhone: formData.customerPhone,
+        customerPhone: `+63${formData.customerPhone}`,
         pickupAddress: formData.pickupAddress,
         deliveryAddress: formData.dropoffAddress, // map to database field
         deliveryFee: formData.deliveryFee,
@@ -1166,15 +1182,21 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                   <label htmlFor="customerPhone" className="block text-sm font-medium text-gray-300 mb-2">
                     Phone Number *
                   </label>
-                  <input
-                    type="tel"
-                    id="customerPhone"
-                    name="customerPhone"
-                    value={formData.customerPhone}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-700 text-white"
-                  />
+                  <div className="flex gap-2">
+                    <span className="inline-flex items-center px-3 py-2 border border-gray-600 rounded-md bg-gray-600 text-gray-300 sm:text-sm">
+                      +63
+                    </span>
+                    <input
+                      type="tel"
+                      id="customerPhone"
+                      name="customerPhone"
+                      value={formData.customerPhone}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="9171234567"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-700 text-white"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

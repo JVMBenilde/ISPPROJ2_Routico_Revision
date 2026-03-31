@@ -3,6 +3,77 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { requirePerm, requireDriver } = require('../middleware/auth');
 
+const LICENSE_REGEX = /^(?=.{6,20}$)(?=.*\d)[A-Z0-9]+(?:-[A-Z0-9]+)*$/;
+
+const normalizeDriverLicense = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toUpperCase();
+};
+
+const normalizeDateOnly = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'string') {
+    return value.trim().split('T')[0];
+  }
+  return String(value).split('T')[0];
+};
+
+const parseDateOnly = (dateString) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return null;
+  const date = new Date(`${dateString}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+};
+
+const validateDriverLicenseFields = (licenseNumber, licenseExpiry) => {
+  const normalizedLicense = normalizeDriverLicense(licenseNumber);
+  const normalizedExpiry = normalizeDateOnly(licenseExpiry);
+
+  if ((normalizedLicense && !normalizedExpiry) || (!normalizedLicense && normalizedExpiry)) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'License number and license expiry must both be provided'
+    };
+  }
+
+  if (normalizedLicense && !LICENSE_REGEX.test(normalizedLicense)) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Invalid license number format. Use 6-20 uppercase letters/numbers and optional hyphens (example: N01-23-123456)'
+    };
+  }
+
+  if (normalizedExpiry) {
+    const expiryDate = parseDateOnly(normalizedExpiry);
+    if (!expiryDate) {
+      return {
+        ok: false,
+        status: 400,
+        error: 'Invalid license expiry date format. Use YYYY-MM-DD'
+      };
+    }
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    if (expiryDate < today) {
+      return {
+        ok: false,
+        status: 400,
+        error: 'License expiry date must be today or a future date'
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    normalizedLicense,
+    normalizedExpiry
+  };
+};
+
 // Get all drivers for the authenticated business owner
 router.get('/', requirePerm('view_drivers'), async (req, res) => {
   try {
@@ -71,6 +142,11 @@ router.post('/', requirePerm('manage_drivers'), async (req, res) => {
   const db = req.app.locals.db;
   const userId = req.user.user_id;
   const { firstName, lastName, email, phone, licenseNumber, licenseExpiry, status } = req.body;
+
+  const licenseValidation = validateDriverLicenseFields(licenseNumber, licenseExpiry);
+  if (!licenseValidation.ok) {
+    return res.status(licenseValidation.status).json({ error: licenseValidation.error });
+  }
 
   if (!firstName || !lastName) {
     return res.status(400).json({ error: 'First name and last name are required' });
@@ -148,7 +224,17 @@ router.post('/', requirePerm('manage_drivers'), async (req, res) => {
       const [driverInsert] = await connection.query(
         `INSERT INTO drivers (owner_id, user_id, first_name, last_name, email, phone, license_number, license_expiry, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [ownerId, newUserId, firstName, lastName, email, phone || null, licenseNumber || null, licenseExpiry || null, status || 'active']
+        [
+          ownerId,
+          newUserId,
+          firstName,
+          lastName,
+          email,
+          phone || null,
+          licenseValidation.normalizedLicense || null,
+          licenseValidation.normalizedExpiry || null,
+          status || 'active'
+        ]
       );
 
       await connection.commit();
@@ -182,6 +268,11 @@ router.put('/:driverId', requirePerm('manage_drivers'), async (req, res) => {
 
     const { firstName, lastName, email, phone, licenseNumber, licenseExpiry, ridesCompleted, status } = req.body;
 
+    const licenseValidation = validateDriverLicenseFields(licenseNumber, licenseExpiry);
+    if (!licenseValidation.ok) {
+      return res.status(licenseValidation.status).json({ error: licenseValidation.error });
+    }
+
     const [ownerResult] = await db.query(
       'SELECT owner_id FROM businessowners WHERE user_id = ?',
       [userId]
@@ -206,7 +297,18 @@ router.put('/:driverId', requirePerm('manage_drivers'), async (req, res) => {
     await db.query(
       `UPDATE drivers SET first_name=?, last_name=?, email=?, phone=?, license_number=?, license_expiry=?, rides_completed=?, status=?
        WHERE driver_id=? AND owner_id=?`,
-      [firstName, lastName, email || null, phone || null, licenseNumber || null, licenseExpiry || null, parseInt(ridesCompleted) || 0, status || 'active', driverId, ownerId]
+      [
+        firstName,
+        lastName,
+        email || null,
+        phone || null,
+        licenseValidation.normalizedLicense || null,
+        licenseValidation.normalizedExpiry || null,
+        parseInt(ridesCompleted) || 0,
+        status || 'active',
+        driverId,
+        ownerId
+      ]
     );
 
     const [updated] = await db.query('SELECT * FROM drivers WHERE driver_id = ?', [driverId]);

@@ -23,6 +23,11 @@ const BusinessOwnerDrivers = () => {
   const [createdCredentials, setCreatedCredentials] = useState(null);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const countryCode = '+63';
+  const licenseRegex = /^(?=.{6,20}$)(?=.*\d)[A-Z0-9]+(?:-[A-Z0-9]+)*$/;
+
+  const normalizeLicense = (value) => (value || '').trim().toUpperCase();
+
+  const normalizeDateOnly = (value) => (value || '').trim().split('T')[0];
 
   useEffect(() => {
     if (user) {
@@ -93,6 +98,35 @@ const BusinessOwnerDrivers = () => {
       return;
     }
 
+    const normalizedLicenseNumber = normalizeLicense(formData.licenseNumber);
+    const normalizedLicenseExpiry = normalizeDateOnly(formData.licenseExpiry);
+
+    if ((normalizedLicenseNumber && !normalizedLicenseExpiry) || (!normalizedLicenseNumber && normalizedLicenseExpiry)) {
+      toast.warning('License number and license expiry must both be provided');
+      return;
+    }
+
+    if (normalizedLicenseNumber && !licenseRegex.test(normalizedLicenseNumber)) {
+      toast.warning('Invalid license number format (example: N01-23-123456)');
+      return;
+    }
+
+    if (normalizedLicenseExpiry) {
+      const expiryDate = new Date(`${normalizedLicenseExpiry}T00:00:00.000Z`);
+      if (Number.isNaN(expiryDate.getTime())) {
+        toast.warning('Invalid license expiry date');
+        return;
+      }
+
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+
+      if (expiryDate < today) {
+        toast.warning('License expiry date must be today or a future date');
+        return;
+      }
+    }
+
     try {
       const headers = await getAuthHeaders();
 
@@ -106,8 +140,8 @@ const BusinessOwnerDrivers = () => {
             lastName: formData.lastName,
             email: formData.email,
             phone: formData.phone,
-            licenseNumber: formData.licenseNumber,
-            licenseExpiry: formData.licenseExpiry || null,
+            licenseNumber: normalizedLicenseNumber || null,
+            licenseExpiry: normalizedLicenseExpiry || null,
             ridesCompleted: parseInt(formData.ridesCompleted) || 0,
             status: formData.status || 'active'
           })
@@ -129,8 +163,8 @@ const BusinessOwnerDrivers = () => {
             lastName: formData.lastName,
             email: formData.email,
             phone: fullPhone,
-            licenseNumber: formData.licenseNumber,
-            licenseExpiry: formData.licenseExpiry || null
+            licenseNumber: normalizedLicenseNumber || null,
+            licenseExpiry: normalizedLicenseExpiry || null
           })
         });
         if (!response.ok) {
@@ -344,8 +378,9 @@ const BusinessOwnerDrivers = () => {
                 value={formData.licenseNumber}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="DL-2024-001"
+                placeholder="N01-23-123456"
               />
+              <p className="mt-1 text-xs text-gray-400">Use uppercase letters/numbers and hyphens only</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">License Expiry</label>

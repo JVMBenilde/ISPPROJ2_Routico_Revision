@@ -715,6 +715,48 @@ router.get('/user/:userId/payment-status', requirePerm('view_subscription_paymen
 });
 
 // Get dashboard statistics (Admin only)
+// Get recent activity for business owner (own actions + drivers' actions)
+router.get('/my-activity', requirePerm('view_business_dashboard'), async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const userId = req.user.user_id;
+
+    // Get owner_id and all driver user_ids for this business owner
+    const [ownerResult] = await db.query('SELECT owner_id FROM businessowners WHERE user_id = ?', [userId]);
+    if (ownerResult.length === 0) {
+      return res.json({ logs: [] });
+    }
+
+    const ownerId = ownerResult[0].owner_id;
+    const [driverRows] = await db.query('SELECT user_id FROM drivers WHERE owner_id = ? AND user_id IS NOT NULL', [ownerId]);
+    const driverUserIds = driverRows.map(d => d.user_id);
+
+    // Build user ID list: owner + all their drivers
+    const allUserIds = [userId, ...driverUserIds];
+    const placeholders = allUserIds.map(() => '?').join(',');
+
+    const [logs] = await db.query(
+      `SELECT al.*, u.full_name as user_name
+       FROM audit_logs al
+       LEFT JOIN users u ON al.user_id = u.user_id
+       WHERE al.user_id IN (${placeholders})
+       ORDER BY al.created_at DESC
+       LIMIT 10`,
+      allUserIds
+    );
+
+    const parsed = logs.map(log => ({
+      ...log,
+      metadata: log.metadata ? (typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata) : null
+    }));
+
+    res.json({ logs: parsed });
+  } catch (error) {
+    console.error('Error fetching business owner activity:', error);
+    res.status(500).json({ error: 'Failed to fetch activity' });
+  }
+});
+
 router.get('/dashboard-stats', requirePerm('view_dashboard_stats'), async (req, res) => {
   try {
     const db = req.app.locals.db;

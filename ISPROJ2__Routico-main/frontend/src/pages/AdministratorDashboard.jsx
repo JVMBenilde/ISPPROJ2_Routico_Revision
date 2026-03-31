@@ -28,6 +28,7 @@ const AdministratorDashboard = () => {
   });
 
   const [pendingUsers, setPendingUsers] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -76,8 +77,16 @@ const AdministratorDashboard = () => {
         const pendingData = await pendingResponse.json();
         setPendingUsers(pendingData);
       } else {
-        // Don't throw error for pending users, just use empty array
         setPendingUsers([]);
+      }
+
+      // Fetch recent audit logs for activity timeline
+      const activityResponse = await fetch('http://localhost:3001/api/audit-logs?limit=10&page=1', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (activityResponse.ok) {
+        const activityData = await activityResponse.json();
+        setRecentActivity(activityData.logs || []);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -268,13 +277,38 @@ const AdministratorDashboard = () => {
     </div>
   );
 
-  // Admin activity items for the timeline
-  const adminActivityItems = [
-    { action: 'Manage Users', color: 'bg-blue-500', textColor: 'text-blue-400', onClick: () => setActiveTab('users') },
-    { action: 'Review Applications', color: 'bg-amber-500', textColor: 'text-amber-400', onClick: () => setActiveTab('users') },
-    { action: 'Platform Analytics', color: 'bg-emerald-500', textColor: 'text-emerald-400', onClick: () => setActiveTab('analytics') },
-    { action: 'System Settings', color: 'bg-purple-500', textColor: 'text-purple-400', onClick: () => setActiveTab('settings') },
-  ];
+  const getCategoryColor = (category) => {
+    const colors = {
+      auth: 'bg-blue-500',
+      users: 'bg-indigo-500',
+      orders: 'bg-emerald-500',
+      drivers: 'bg-cyan-500',
+      billing: 'bg-amber-500',
+      roles: 'bg-purple-500',
+      routes: 'bg-teal-500',
+      tracking: 'bg-orange-500',
+      issues: 'bg-red-500',
+      analytics: 'bg-pink-500',
+    };
+    return colors[category] || 'bg-gray-500';
+  };
+
+  const formatAction = (action) => {
+    return (action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  const formatTimeAgo = (dateStr) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
 
   return (
     <div className="min-h-screen flex bg-[#111621]">
@@ -659,66 +693,36 @@ const AdministratorDashboard = () => {
                     </div>
                   </div>
 
-                  {/* Right column - Admin Activity Timeline */}
+                  {/* Right column - Recent Activity Timeline */}
                   <div className="xl:col-span-1">
                     <div className="bg-slate-900 border border-slate-800 rounded-xl">
                       <div className="px-6 py-5">
-                        <h3 className="text-base font-semibold text-white mb-5">
-                          Admin Activity
-                        </h3>
+                        <div className="flex items-center justify-between mb-5">
+                          <h3 className="text-base font-semibold text-white">
+                            Recent Activity
+                          </h3>
+                          <button onClick={() => setActiveTab('audit')} className="text-xs text-blue-400 hover:text-blue-300">View All</button>
+                        </div>
                         <div className="relative">
-                          {/* Connecting line */}
                           <div className="absolute left-[7px] top-2 bottom-2 w-px bg-slate-800"></div>
-
-                          <div className="space-y-5">
-                            {adminActivityItems.map((item, index) => (
-                              <button
-                                key={index}
-                                onClick={item.onClick}
-                                className="relative flex items-center gap-4 w-full text-left group"
-                              >
-                                {/* Timeline dot */}
-                                <div className={`relative z-10 w-3.5 h-3.5 rounded-full ${item.color} flex-shrink-0 ring-4 ring-slate-900`}></div>
-                                {/* Content */}
-                                <div className="flex-1 py-2 px-3 rounded-lg hover:bg-slate-800/50 transition-colors">
-                                  <p className={`text-sm font-medium ${item.textColor} group-hover:text-white transition-colors`}>
-                                    {item.action}
+                          <div className="space-y-4">
+                            {recentActivity.length === 0 ? (
+                              <p className="text-sm text-slate-500 text-center py-4">No recent activity</p>
+                            ) : recentActivity.map((log, index) => (
+                              <div key={log.log_id || index} className="relative flex items-start gap-4">
+                                <div className={`relative z-10 w-3.5 h-3.5 rounded-full ${getCategoryColor(log.category)} flex-shrink-0 ring-4 ring-slate-900 mt-1`}></div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-white truncate">{formatAction(log.action)}</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    {log.user_name || log.user_email || 'System'} &middot; {formatTimeAgo(log.created_at)}
                                   </p>
-                                  <p className="text-xs text-slate-600 mt-0.5">Quick action</p>
+                                  {log.description && <p className="text-xs text-slate-600 mt-0.5 truncate">{log.description}</p>}
                                 </div>
-                              </button>
+                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                  {log.status}
+                                </span>
+                              </div>
                             ))}
-
-                            {/* System status items in the timeline */}
-                            <div className="relative flex items-center gap-4">
-                              <div className="relative z-10 w-3.5 h-3.5 rounded-full bg-emerald-500 flex-shrink-0 ring-4 ring-slate-900"></div>
-                              <div className="flex-1 py-2 px-3">
-                                <div className="flex items-center justify-between">
-                                  <p className="text-sm text-slate-400">Server Status</p>
-                                  <span className="text-[11px] font-medium text-emerald-400">Online</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="relative flex items-center gap-4">
-                              <div className="relative z-10 w-3.5 h-3.5 rounded-full bg-emerald-500 flex-shrink-0 ring-4 ring-slate-900"></div>
-                              <div className="flex-1 py-2 px-3">
-                                <div className="flex items-center justify-between">
-                                  <p className="text-sm text-slate-400">Database</p>
-                                  <span className="text-[11px] font-medium text-emerald-400">Connected</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="relative flex items-center gap-4">
-                              <div className="relative z-10 w-3.5 h-3.5 rounded-full bg-emerald-500 flex-shrink-0 ring-4 ring-slate-900"></div>
-                              <div className="flex-1 py-2 px-3">
-                                <div className="flex items-center justify-between">
-                                  <p className="text-sm text-slate-400">Firebase</p>
-                                  <span className="text-[11px] font-medium text-emerald-400">Active</span>
-                                </div>
-                              </div>
-                            </div>
                           </div>
                         </div>
                       </div>

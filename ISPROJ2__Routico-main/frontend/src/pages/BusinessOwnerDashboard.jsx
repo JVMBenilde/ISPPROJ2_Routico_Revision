@@ -33,6 +33,7 @@ const BusinessOwnerDashboard = () => {
 
   const [recentOrders, setRecentOrders] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
   const [error, setError] = useState(null);
 
   // Apply dark/light mode to document
@@ -154,6 +155,19 @@ const BusinessOwnerDashboard = () => {
         } else {
           setRecentOrders([]);
         }
+
+        // Fetch recent activity
+        try {
+          const activityResponse = await fetch('http://localhost:3001/api/auth/my-activity', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (activityResponse.ok) {
+            const activityData = await activityResponse.json();
+            setRecentActivity(activityData.logs || []);
+          }
+        } catch (e) {
+          console.error('Error fetching activity:', e);
+        }
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -273,6 +287,23 @@ const BusinessOwnerDashboard = () => {
   const delayedOrders = stats.delayedDeliveries || 0;
   const cancelledOrders = stats.cancelledOrders || 0;
   const inTransitOrders = stats.activeDeliveries || 0;
+
+  const getActivityCategoryColor = (category) => {
+    const colors = { auth: 'bg-blue-500', users: 'bg-indigo-500', orders: 'bg-emerald-500', drivers: 'bg-cyan-500', billing: 'bg-amber-500', roles: 'bg-purple-500', routes: 'bg-teal-500', tracking: 'bg-orange-500', issues: 'bg-red-500', analytics: 'bg-pink-500' };
+    return colors[category] || 'bg-gray-500';
+  };
+
+  const formatActivityAction = (action) => (action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  const formatTimeAgo = (dateStr) => {
+    const diffMs = new Date() - new Date(dateStr);
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${Math.floor(diffHours / 24)}d ago`;
+  };
 
   return (
     <div className="flex min-h-screen overflow-hidden bg-[#111621]">
@@ -807,6 +838,41 @@ const BusinessOwnerDashboard = () => {
                           </span>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Activity */}
+                <div className="lg:col-span-2">
+                  <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-sm">
+                    <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+                      <h4 className="font-bold text-lg text-white">Recent Activity</h4>
+                    </div>
+                    <div className="p-6">
+                      {recentActivity.length === 0 ? (
+                        <p className="text-sm text-slate-500 text-center py-4">No recent activity</p>
+                      ) : (
+                        <div className="relative">
+                          <div className="absolute left-[7px] top-2 bottom-2 w-px bg-slate-800"></div>
+                          <div className="space-y-4">
+                            {recentActivity.map((log, index) => (
+                              <div key={log.log_id || index} className="relative flex items-start gap-4">
+                                <div className={`relative z-10 w-3.5 h-3.5 rounded-full ${getActivityCategoryColor(log.category)} flex-shrink-0 ring-4 ring-slate-900 mt-1`}></div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-white truncate">{formatActivityAction(log.action)}</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    {log.user_name || log.user_email || 'System'} &middot; {formatTimeAgo(log.created_at)}
+                                  </p>
+                                  {log.description && <p className="text-xs text-slate-600 mt-0.5 truncate">{log.description}</p>}
+                                </div>
+                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                  {log.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

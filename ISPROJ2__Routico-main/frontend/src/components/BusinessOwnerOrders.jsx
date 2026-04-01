@@ -52,6 +52,14 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
   const [selectedForOptimize, setSelectedForOptimize] = useState([]);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizationResult, setOptimizationResult] = useState(null);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+  const [routeDetails, setRouteDetails] = useState(null); // { summary, alternatives }
+  const [selectedSingleRouteIndex, setSelectedSingleRouteIndex] = useState(0);
+  const [lastTrafficUpdate, setLastTrafficUpdate] = useState(null);
+  const [orderRouteDetails, setOrderRouteDetails] = useState(null);
+  const [selectedOrderRouteIndex, setSelectedOrderRouteIndex] = useState(0);
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const orderDetailRef = useRef(null);
   const optimizationMapRef = useRef(null);
   // Helper to update orders in-place
   const updateOrderInState = updated => setOrders(orders => orders.map(o => o.order_id === updated.order_id ? updated : o));
@@ -176,6 +184,9 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
       setOptimizing(false);
     }
   };
+
+  // Traffic on the optimization map updates automatically via Google's TrafficLayer
+  // No need to re-call the backend — the map overlay is truly live
 
   const editPickupInputRef = useRef(null);
   const editDropoffInputRef = useRef(null);
@@ -351,6 +362,11 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         });
         
         window.orderMap = map; // Store map globally for updates
+
+        // Add live traffic layer
+        const trafficLayer = new window.google.maps.TrafficLayer();
+        trafficLayer.setMap(map);
+
         console.log('Map initialized successfully');
         
         // Update map with current locations
@@ -533,30 +549,60 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         origin,
         destination,
         travelMode: window.google.maps.TravelMode.DRIVING,
+        drivingOptions: {
+          departureTime: new Date(),
+          trafficModel: 'bestguess'
+        },
+        provideRouteAlternatives: true,
         region: 'ph',
         unitSystem: window.google.maps.UnitSystem.METRIC
       },
       (result, status) => {
         if (status === window.google.maps.DirectionsStatus.OK) {
-          // Display the route
+          // Parse all routes and sort by shortest distance
+          const allRoutes = result.routes.map((route, idx) => {
+            const leg = route.legs[0];
+            const durationSeconds = leg.duration_in_traffic ? leg.duration_in_traffic.value : leg.duration.value;
+            return {
+              index: idx,
+              summary: route.summary,
+              distance_km: Math.round(leg.distance.value / 100) / 10,
+              duration_minutes: Math.round(durationSeconds / 60),
+              distance_text: leg.distance.text,
+              duration_text: leg.duration_in_traffic ? leg.duration_in_traffic.text : leg.duration.text
+            };
+          }).sort((a, b) => a.distance_km - b.distance_km);
+
+          // Display the shortest route
           window.DirectionsRenderer.setDirections(result);
-          
-          // Get route details
-          const route = result.routes[0];
-          const leg = route.legs[0];
-          
-          // Update distance and time
+          if (allRoutes[0].index !== 0) {
+            window.DirectionsRenderer.setRouteIndex(allRoutes[0].index);
+          }
+
+          // Store all directionsResult for route switching
+          window.currentDirectionsResult = result;
+
+          // After first render, preserve viewport on refreshes
+          if (window.DirectionsRenderer) {
+            window.DirectionsRenderer.setOptions({ preserveViewport: true });
+          }
+
+          // Update form with shortest route data
           setFormData(prev => ({
             ...prev,
-            routeDistance: leg.distance.value / 1000, // Convert to km
-            routeDuration: Math.round(leg.duration.value / 60) // Convert to minutes
+            routeDistance: allRoutes[0].distance_km,
+            routeDuration: allRoutes[0].duration_minutes
           }));
 
-          console.log('Route calculated:', {
-            distance: leg.distance.text,
-            duration: leg.duration.text,
-            distanceInKm: leg.distance.value / 1000
+          // Store route details and alternatives
+          setRouteDetails({
+            routes: allRoutes,
+            summary: allRoutes[0].summary
           });
+          setSelectedSingleRouteIndex(0);
+          setLastTrafficUpdate(new Date());
+
+          console.log('Route calculated:', allRoutes);
         } else {
           console.error('Directions request failed:', status);
         }
@@ -573,6 +619,48 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
       return () => clearTimeout(timer);
     }
   }, [formData.pickupLocation, formData.dropoffLocation, formData.pickupAddress, formData.dropoffAddress]);
+
+  // Auto-refresh traffic data every 15 seconds for single order route
+  useEffect(() => {
+    if (!formData.pickupLocation || !formData.dropoffLocation || !routeDetails) return;
+
+    const refreshTraffic = () => {
+      if (window.DirectionsService && window.DirectionsRenderer && window.orderMap) {
+        const origin = formData.pickupAddress || new window.google.maps.LatLng(formData.pickupLocation.lat, formData.pickupLocation.lng);
+        const destination = formData.dropoffAddress || new window.google.maps.LatLng(formData.dropoffLocation.lat, formData.dropoffLocation.lng);
+
+        window.DirectionsService.route({
+          origin, destination,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+          drivingOptions: { departureTime: new Date(), trafficModel: 'bestguess' },
+          provideRouteAlternatives: true,
+          region: 'ph',
+        }, (result, status) => {
+          if (status === 'OK') {
+            window.currentDirectionsResult = result;
+            window.DirectionsRenderer.setDirections(result);
+
+            const allRoutes = result.routes.map((route, idx) => {
+              const leg = route.legs[0];
+              const dur = leg.duration_in_traffic ? leg.duration_in_traffic.value : leg.duration.value;
+              return { index: idx, summary: route.summary, distance_km: Math.round(leg.distance.value / 100) / 10, duration_minutes: Math.round(dur / 60) };
+            }).sort((a, b) => a.distance_km - b.distance_km);
+
+            const selected = allRoutes[selectedSingleRouteIndex] || allRoutes[0];
+            if (selected) {
+              window.DirectionsRenderer.setRouteIndex(selected.index);
+              setFormData(prev => ({ ...prev, routeDistance: selected.distance_km, routeDuration: selected.duration_minutes }));
+            }
+            setRouteDetails(prev => ({ ...prev, routes: allRoutes }));
+            setLastTrafficUpdate(new Date());
+          }
+        });
+      }
+    };
+
+    const interval = setInterval(refreshTraffic, 15000);
+    return () => clearInterval(interval);
+  }, [formData.pickupLocation, formData.dropoffLocation, routeDetails?.routes?.length, selectedSingleRouteIndex]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -686,6 +774,9 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
       deliveryFee: '',
     });
     
+    setRouteDetails(null);
+    setSelectedSingleRouteIndex(0);
+
     // Clear autocomplete instances to allow re-initialization
     pickupAutocompleteRef.current = null;
     deliveryAutocompleteRef.current = null;
@@ -766,6 +857,9 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
           zoom: 12,
           center: pickupLatLng,
         });
+        // Add live traffic layer
+        const trafficLayer = new window.google.maps.TrafficLayer();
+        trafficLayer.setMap(map);
         // Add markers
         new window.google.maps.Marker({
           position: pickupLatLng,
@@ -781,16 +875,35 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
             url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
           }
         });
-        // Show route
+        // Show route with real-time traffic and alternatives
         const ds = new window.google.maps.DirectionsService();
         const dr = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: true });
+        window.orderDetailDR = dr;
         ds.route({
           origin: pickupLatLng,
           destination: dropoffLatLng,
           travelMode: window.google.maps.TravelMode.DRIVING,
+          drivingOptions: { departureTime: new Date(), trafficModel: 'bestguess' },
+          provideRouteAlternatives: true,
           region: 'ph',
         }, (result, status) => {
-          if (status === 'OK') dr.setDirections(result);
+          if (status === 'OK') {
+            dr.setDirections(result);
+            window.orderDetailDirectionsResult = result;
+
+            const allRoutes = result.routes.map((route, idx) => {
+              const leg = route.legs[0];
+              const dur = leg.duration_in_traffic ? leg.duration_in_traffic.value : leg.duration.value;
+              return { index: idx, summary: route.summary, distance_km: Math.round(leg.distance.value / 100) / 10, duration_minutes: Math.round(dur / 60) };
+            }).sort((a, b) => a.distance_km - b.distance_km);
+
+            // Show shortest route
+            if (allRoutes[0].index !== 0) dr.setRouteIndex(allRoutes[0].index);
+            dr.setOptions({ preserveViewport: true });
+
+            setOrderRouteDetails({ routes: allRoutes });
+            setSelectedOrderRouteIndex(0);
+          }
         });
       };
 
@@ -802,8 +915,49 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
     };
     showMapForOrder();
     // Fetch tracking log when order is selected
-    if (selectedOrder) fetchStatusLog(selectedOrder.order_id);
+    if (selectedOrder) {
+      fetchStatusLog(selectedOrder.order_id);
+      setShowMoreDetails(false);
+    }
   }, [selectedOrder]);
+
+  // Auto-refresh traffic for order detail view every 15 seconds
+  useEffect(() => {
+    if (!selectedOrder || !selectedOrder.pickup_location || !selectedOrder.drop_off_location) return;
+    if (!window.orderDetailDR) return;
+
+    const refreshOrderTraffic = () => {
+      if (!window.google || !window.google.maps) return;
+      const ds = new window.google.maps.DirectionsService();
+      ds.route({
+        origin: selectedOrder.pickup_location,
+        destination: selectedOrder.drop_off_location,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        drivingOptions: { departureTime: new Date(), trafficModel: 'bestguess' },
+        provideRouteAlternatives: true,
+        region: 'ph',
+      }, (result, status) => {
+        if (status === 'OK' && window.orderDetailDR) {
+          window.orderDetailDirectionsResult = result;
+          window.orderDetailDR.setOptions({ preserveViewport: true });
+          window.orderDetailDR.setDirections(result);
+
+          const allRoutes = result.routes.map((route, idx) => {
+            const leg = route.legs[0];
+            const dur = leg.duration_in_traffic ? leg.duration_in_traffic.value : leg.duration.value;
+            return { index: idx, summary: route.summary, distance_km: Math.round(leg.distance.value / 100) / 10, duration_minutes: Math.round(dur / 60) };
+          }).sort((a, b) => a.distance_km - b.distance_km);
+
+          const selected = allRoutes[selectedOrderRouteIndex] || allRoutes[0];
+          if (selected) window.orderDetailDR.setRouteIndex(selected.index);
+          setOrderRouteDetails({ routes: allRoutes });
+        }
+      });
+    };
+
+    const interval = setInterval(refreshOrderTraffic, 15000);
+    return () => clearInterval(interval);
+  }, [selectedOrder?.order_id, selectedOrderRouteIndex]);
 
   // Show optimization route map
   useEffect(() => {
@@ -843,6 +997,10 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         center: coords[0],
       });
 
+      // Add live traffic layer
+      const trafficLayer = new window.google.maps.TrafficLayer();
+      trafficLayer.setMap(map);
+
       // Add numbered markers
       coords.forEach((c, i) => {
         new window.google.maps.Marker({
@@ -853,7 +1011,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         });
       });
 
-      // Draw route through waypoints
+      // Draw route through waypoints with real-time traffic
       const ds = new window.google.maps.DirectionsService();
       const dr = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: true });
       const waypoints = coords.slice(1, -1).map(c => ({
@@ -866,6 +1024,10 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         destination: { lat: coords[coords.length - 1].lat, lng: coords[coords.length - 1].lng },
         waypoints,
         travelMode: window.google.maps.TravelMode.DRIVING,
+        drivingOptions: {
+          departureTime: new Date(),
+          trafficModel: 'bestguess'
+        },
         region: 'ph',
       }, (result, status) => {
         if (status === 'OK') dr.setDirections(result);
@@ -1098,11 +1260,13 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         orderDetailMapRef.current.innerHTML = '';
         if (!pi || !di) return;
         const map = new window.google.maps.Map(orderDetailMapRef.current, { zoom: 12, center: pi });
+        const trafficLayer = new window.google.maps.TrafficLayer();
+        trafficLayer.setMap(map);
         new window.google.maps.Marker({ position: pi, map, label: 'P', title: 'Pickup', icon: { url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png' }});
         new window.google.maps.Marker({ position: di, map, label: 'D', title: 'Dropoff', icon: { url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png' }});
         const ds = new window.google.maps.DirectionsService();
         const dr = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: true });
-        ds.route({ origin: pi, destination: di, travelMode: window.google.maps.TravelMode.DRIVING, region: 'ph' }, (result, status) => {
+        ds.route({ origin: pi, destination: di, travelMode: window.google.maps.TravelMode.DRIVING, drivingOptions: { departureTime: new Date(), trafficModel: 'bestguess' }, region: 'ph' }, (result, status) => {
           if (status === 'OK') dr.setDirections(result);
         });
       };
@@ -1237,16 +1401,53 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                   {formData.routeDistance > 0 && (
                     <div className="flex items-center gap-4 text-sm">
                       <span className="text-blue-400">
-                        📍 {formData.routeDistance.toFixed(2)} km
+                        {formData.routeDistance.toFixed(1)} km
                       </span>
                       {formData.routeDuration > 0 && (
                         <span className="text-green-400">
-                          ⏱️ {formData.routeDuration} min
+                          {formData.routeDuration} min
                         </span>
+                      )}
+                      {routeDetails && (
+                        <span className="text-green-400 text-xs animate-pulse">● Live traffic</span>
+                      )}
+                      {lastTrafficUpdate && (
+                        <span className="text-gray-500 text-[10px]">Updated: {lastTrafficUpdate.toLocaleTimeString()}</span>
                       )}
                     </div>
                   )}
                 </div>
+
+                {/* Route summary and alternatives */}
+                {routeDetails && routeDetails.routes.length > 0 && (
+                  <div className="mb-2 space-y-1">
+                    {routeDetails.routes.map((route, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setSelectedSingleRouteIndex(i);
+                          setFormData(prev => ({ ...prev, routeDistance: route.distance_km, routeDuration: route.duration_minutes }));
+                          if (window.DirectionsRenderer && window.currentDirectionsResult) {
+                            window.DirectionsRenderer.setRouteIndex(route.index);
+                          }
+                        }}
+                        className={`w-full flex items-center justify-between text-xs px-3 py-2 rounded-lg border transition-colors ${
+                          selectedSingleRouteIndex === i
+                            ? 'bg-blue-600/20 border-blue-500 text-white'
+                            : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          {selectedSingleRouteIndex === i && <span className="text-blue-400">✓</span>}
+                          {i === 0 ? '⚡ Shortest' : route.summary || `Alt ${i}`}
+                          {i === 0 && <span className="text-[9px] bg-green-600/30 text-green-400 px-1 rounded">Recommended</span>}
+                        </span>
+                        <span className="font-medium">{route.distance_km} km · {route.duration_minutes} min</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div
                   ref={mapRef}
                   className="w-full h-80 rounded-md border border-gray-600"
@@ -1461,64 +1662,83 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="bg-gray-800 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-gray-500 uppercase">Stops</p>
-                    <p className="text-sm font-bold text-white">{optimizationResult.total_stops}</p>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-gray-500 uppercase">Distance</p>
-                    <p className="text-sm font-bold text-white">{optimizationResult.estimated_distance_km} km</p>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-gray-500 uppercase">ETA</p>
-                    <p className="text-sm font-bold text-white">
-                      {optimizationResult.eta ? `${optimizationResult.eta.duration_traffic_minutes} min` : 'N/A'}
-                    </p>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-gray-500 uppercase">Savings</p>
-                    <p className="text-sm font-bold text-green-400">~{optimizationResult.estimated_savings_percent}%</p>
-                  </div>
-                </div>
+                {/* Route Selection */}
+                {(() => {
+                  const allRoutes = [
+                    optimizationResult.eta ? { ...optimizationResult.eta, distance_km: optimizationResult.estimated_distance_km, label: 'Shortest Route' } : null,
+                    ...(optimizationResult.alternative_routes || []).map((alt, i) => ({ ...alt, label: alt.summary || `Alternative ${i + 1}` }))
+                  ].filter(Boolean);
+                  const selected = allRoutes[selectedRouteIndex] || allRoutes[0];
 
-                {/* Traffic & Route Info */}
-                {optimizationResult.eta && (
-                  <div className="mt-2 p-2 bg-gray-800/50 rounded-lg border border-gray-700">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-gray-400">Route:</span>
-                      <span className="text-white font-medium">{optimizationResult.eta.summary || 'Via optimized path'}</span>
-                    </div>
-                    <div className="flex items-center gap-4 mt-1 text-xs">
-                      <span className="text-gray-400">Without traffic: <span className="text-white">{optimizationResult.eta.duration_minutes} min</span></span>
-                      <span className="text-gray-400">With traffic: <span className="text-yellow-400 font-medium">{optimizationResult.eta.duration_traffic_minutes} min</span></span>
-                    </div>
-                    {optimizationResult.eta.legs && optimizationResult.eta.legs.length > 1 && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-[10px] text-gray-500 uppercase">Leg Breakdown:</p>
-                        {optimizationResult.eta.legs.map((leg, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
-                            <span className="w-4 h-4 bg-purple-600 text-white rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0">{i + 1}</span>
-                            <span className="truncate flex-1">{leg.distance} &middot; {leg.duration_traffic}</span>
+                  return (
+                    <>
+                      {/* Stats for selected route */}
+                      <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <div className="bg-gray-800 rounded-lg p-2 text-center">
+                          <p className="text-[10px] text-gray-500 uppercase">Stops</p>
+                          <p className="text-sm font-bold text-white">{optimizationResult.total_stops}</p>
+                        </div>
+                        <div className="bg-gray-800 rounded-lg p-2 text-center">
+                          <p className="text-[10px] text-gray-500 uppercase">Distance</p>
+                          <p className="text-sm font-bold text-white">{selected?.distance_km || optimizationResult.estimated_distance_km} km</p>
+                        </div>
+                        <div className="bg-gray-800 rounded-lg p-2 text-center">
+                          <p className="text-[10px] text-gray-500 uppercase">ETA (Real-time)</p>
+                          <p className="text-sm font-bold text-white">
+                            {selected?.duration_traffic_minutes ? `${selected.duration_traffic_minutes} min` : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Route info for selected route */}
+                      {selected && (
+                        <div className="mt-2 p-2 bg-gray-800/50 rounded-lg border border-gray-700">
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-gray-400">Route:</span>
+                            <span className="text-white font-medium">{selected.summary || 'Via optimized path'}</span>
+                            <span className="text-green-400 text-[10px] animate-pulse">● Live traffic</span>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                          {selected.legs && selected.legs.length > 1 && (
+                            <div className="mt-2 space-y-1">
+                              <p className="text-[10px] text-gray-500 uppercase">Leg Breakdown:</p>
+                              {selected.legs.map((leg, i) => (
+                                <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
+                                  <span className="w-4 h-4 bg-purple-600 text-white rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0">{i + 1}</span>
+                                  <span className="truncate flex-1">{leg.distance} &middot; {leg.duration_traffic}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                {/* Alternative Routes */}
-                {optimizationResult.alternative_routes && optimizationResult.alternative_routes.length > 0 && (
-                  <div className="mt-2 p-2 bg-gray-800/50 rounded-lg border border-blue-500/20">
-                    <p className="text-xs text-blue-400 font-medium mb-1">Alternative Routes Available:</p>
-                    {optimizationResult.alternative_routes.map((alt, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs text-gray-400 py-1">
-                        <span>{alt.summary || `Alternative ${i + 1}`}</span>
-                        <span className="text-white">{alt.distance_km} km &middot; {alt.duration_traffic_minutes} min</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      {/* Route selection buttons */}
+                      {allRoutes.length > 1 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-[10px] text-gray-500 uppercase">Select Route:</p>
+                          {allRoutes.map((route, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setSelectedRouteIndex(i)}
+                              className={`w-full flex items-center justify-between text-xs px-3 py-2 rounded-lg border transition-colors ${
+                                selectedRouteIndex === i
+                                  ? 'bg-blue-600/20 border-blue-500 text-white'
+                                  : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                {selectedRouteIndex === i && <span className="text-blue-400">✓</span>}
+                                {i === 0 ? '⚡ Shortest Route' : route.label}
+                                {i === 0 && <span className="text-[9px] bg-green-600/30 text-green-400 px-1 rounded">Recommended</span>}
+                              </span>
+                              <span className="font-medium">{route.distance_km} km &middot; {route.duration_traffic_minutes} min</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 <div ref={optimizationMapRef} style={{ width: '100%', height: 350, borderRadius: 8, border: '1px solid #334155', background: '#232946', marginTop: 12 }} />
 
@@ -1560,8 +1780,10 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                           if (res.ok) {
                             const data = await res.json();
                             toast.success(`Driver assigned to ${orderIds.length} orders in optimized route!`);
-                            // Refresh orders list
-                            const ordersRes = await fetch('http://localhost:3001/api/orders', {
+                            // Clear optimization result and refresh orders
+                            setOptimizationResult(null);
+                            setSelectedRouteIndex(0);
+                            const ordersRes = await fetch(`http://localhost:3001/api/orders${routeOptimizationOnly ? '?includeRouted=true' : ''}`, {
                               headers: { 'Authorization': `Bearer ${token}` }
                             });
                             if (ordersRes.ok) setOrders(await ordersRes.json());
@@ -1640,18 +1862,18 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         );
       })()}
 
-      {/* Order Detail View - shown in both modes when an order is selected */}
+      {/* Order Detail View - Slide-in side panel */}
       {selectedOrder && (
-        <div>
-          <div className="bg-gray-900 rounded-lg border border-blue-500 p-8 shadow-xl max-w-xl mx-auto">
+        <div className="fixed top-0 right-0 w-full lg:w-[55%] h-full bg-black/50 lg:bg-transparent z-40" onClick={(e) => { if (e.target === e.currentTarget) { setSelectedOrder(null); setEditMode(false); setEditFields({}); setOrderRouteDetails(null); setSelectedOrderRouteIndex(0); }}}>
+          <div ref={orderDetailRef} className="ml-auto w-full lg:w-full h-full overflow-y-auto bg-gray-900 border-l border-blue-500 p-6 shadow-2xl">
             <button
-              onClick={() => { setSelectedOrder(null); setEditMode(false); setEditFields({}); }}
-              className="mb-4 text-blue-400 hover:text-blue-200 text-sm inline-flex items-center"
+              onClick={() => { setSelectedOrder(null); setEditMode(false); setEditFields({}); setOrderRouteDetails(null); setSelectedOrderRouteIndex(0); }}
+              className="mb-3 text-blue-400 hover:text-blue-200 text-sm inline-flex items-center"
             >
-              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-              Back to list
+              Close
             </button>
             {!editMode ? (
               <>
@@ -1788,19 +2010,80 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                 <div className="grid grid-cols-1 gap-2 text-gray-200 mb-6">
                   <div><b>Status:</b> <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedOrder.order_status)}`}>{selectedOrder.order_status}</span></div>
                   <div><b>Customer:</b> {selectedOrder.customer_name}</div>
-                  <div><b>Phone:</b> {selectedOrder.customer_phone}</div>
-                  <div><b>Pickup Address:</b> {selectedOrder.pickup_location}</div>
-                  <div><b>Dropoff Address:</b> {selectedOrder.drop_off_location}</div>
-                  <div><b>Assigned Driver:</b> {selectedOrder.driver_name || '—'}</div>
-                  <div><b>Weight:</b> {selectedOrder.weight} kg</div>
-                  <div><b>Size:</b> {selectedOrder.size || 'N/A'}</div>
+                  <div><b>Pickup:</b> {selectedOrder.pickup_location}</div>
+                  <div><b>Dropoff:</b> {selectedOrder.drop_off_location}</div>
+                  <div><b>Driver:</b> {selectedOrder.driver_name || '—'}</div>
                   <div><b>Scheduled:</b> {selectedOrder.scheduled_delivery_time ? new Date(selectedOrder.scheduled_delivery_time).toLocaleString() : '—'}</div>
-                  <div><b>Created at:</b> {selectedOrder.order_created_at ? new Date(selectedOrder.order_created_at).toLocaleString() : '—'}</div>
                   <div><b>Delivery Fee:</b> {selectedOrder.delivery_fee ? `₱${Number(selectedOrder.delivery_fee).toFixed(2)}` : '—'}</div>
-                  <div><b>Commission:</b> ₱10.00</div>
+                  {showMoreDetails ? (
+                    <>
+                      <div><b>Phone:</b> {selectedOrder.customer_phone}</div>
+                      <div><b>Weight:</b> {selectedOrder.weight} kg</div>
+                      <div><b>Size:</b> {selectedOrder.size || 'N/A'}</div>
+                      <div><b>Created at:</b> {selectedOrder.order_created_at ? new Date(selectedOrder.order_created_at).toLocaleString() : '—'}</div>
+                      <div><b>Commission:</b> ₱10.00</div>
+                      <button onClick={() => setShowMoreDetails(false)} className="text-blue-400 text-xs hover:text-blue-300 mt-1">Show less</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setShowMoreDetails(true)} className="text-blue-400 text-xs hover:text-blue-300 mt-1">Show more details</button>
+                  )}
                 </div>
                 <div>
-                  <div className="mb-2 text-sm text-blue-400 font-semibold">Route Preview:</div>
+                  <div className="mb-2 text-sm text-blue-400 font-semibold flex items-center gap-2">
+                    Route Preview:
+                    {orderRouteDetails && <span className="text-green-400 text-xs animate-pulse">● Live traffic</span>}
+                  </div>
+
+                  {/* Stats cards */}
+                  {orderRouteDetails && orderRouteDetails.routes.length > 0 && (
+                    <>
+                      <div className="grid grid-cols-3 gap-2 mb-2">
+                        <div className="bg-gray-800 rounded-lg p-2 text-center">
+                          <p className="text-[10px] text-gray-500 uppercase">Distance</p>
+                          <p className="text-sm font-bold text-white">{orderRouteDetails.routes[selectedOrderRouteIndex]?.distance_km} km</p>
+                        </div>
+                        <div className="bg-gray-800 rounded-lg p-2 text-center">
+                          <p className="text-[10px] text-gray-500 uppercase">ETA (Real-time)</p>
+                          <p className="text-sm font-bold text-white">{orderRouteDetails.routes[selectedOrderRouteIndex]?.duration_minutes} min</p>
+                        </div>
+                        <div className="bg-gray-800 rounded-lg p-2 text-center">
+                          <p className="text-[10px] text-gray-500 uppercase">Route</p>
+                          <p className="text-sm font-bold text-white truncate">{orderRouteDetails.routes[selectedOrderRouteIndex]?.summary || 'N/A'}</p>
+                        </div>
+                      </div>
+
+                      {/* Route selection */}
+                      {orderRouteDetails.routes.length > 1 && (
+                        <div className="mb-2 space-y-1">
+                          <p className="text-[10px] text-gray-500 uppercase">Select Route:</p>
+                          {orderRouteDetails.routes.map((route, i) => (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                setSelectedOrderRouteIndex(i);
+                                if (window.orderDetailDR && window.orderDetailDirectionsResult) {
+                                  window.orderDetailDR.setRouteIndex(route.index);
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between text-xs px-3 py-2 rounded-lg border transition-colors ${
+                                selectedOrderRouteIndex === i
+                                  ? 'bg-blue-600/20 border-blue-500 text-white'
+                                  : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                {selectedOrderRouteIndex === i && <span className="text-blue-400">✓</span>}
+                                {i === 0 ? '⚡ Shortest' : route.summary || `Alt ${i}`}
+                                {i === 0 && <span className="text-[9px] bg-green-600/30 text-green-400 px-1 rounded">Recommended</span>}
+                              </span>
+                              <span className="font-medium">{route.distance_km} km · {route.duration_minutes} min</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
                   <div ref={orderDetailMapRef} style={{ width: '100%', height: 320, borderRadius: 8, border: '1px solid #334155', background: '#232946' }} />
                   {(!selectedOrder.pickup_location || !selectedOrder.drop_off_location) && (
                     <div className="mt-3 text-sm text-gray-400">No map data available for this order.</div>
@@ -1981,19 +2264,19 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         </div>
       )}
 
-      {/* Orders List - only in delivery orders mode */}
-      {!routeOptimizationOnly && !selectedOrder && (
+      {/* Orders List */}
+      {!routeOptimizationOnly && (
         <div>
           {orders.length === 0 ? (
-            <div className="bg-gray-800 rounded-lg border border-gray-700 p-12 text-center">
-              <svg className="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="mt-4 text-gray-400">No orders yet. Create your first order to get started!</p>
-            </div>
-          ) : (
-            renderGroupedOrders()
-          )}
+              <div className="bg-gray-800 rounded-lg border border-gray-700 p-12 text-center">
+                <svg className="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p className="mt-4 text-gray-400">No orders yet. Create your first order to get started!</p>
+              </div>
+            ) : (
+              renderGroupedOrders()
+            )}
         </div>
       )}
     </div>

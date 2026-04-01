@@ -747,16 +747,17 @@ const barangayStreets = {
 // Priority: barangay-specific → city-level → common streets
 export const getStreetsForCity = (cityName, barangayName) => {
   if (!cityName) return [];
-  // Try barangay-specific streets first
-  if (barangayName && barangayStreets[cityName]?.[barangayName]) {
-    return barangayStreets[cityName][barangayName];
+  // Combine barangay-specific streets with city-level streets (barangay streets first, then remaining city streets)
+  const barangayList = (barangayName && barangayStreets[cityName]?.[barangayName]) ? barangayStreets[cityName][barangayName] : [];
+  const cityList = cityStreets[cityName] || commonStreets;
+  // Merge: barangay streets first, then city streets not already in the barangay list
+  const merged = [...barangayList];
+  for (const street of cityList) {
+    if (!merged.includes(street)) {
+      merged.push(street);
+    }
   }
-  // Fall back to city-level streets
-  if (cityStreets[cityName]) {
-    return cityStreets[cityName];
-  }
-  // Fall back to common streets
-  return commonStreets;
+  return merged;
 };
 
 export default cityStreets;

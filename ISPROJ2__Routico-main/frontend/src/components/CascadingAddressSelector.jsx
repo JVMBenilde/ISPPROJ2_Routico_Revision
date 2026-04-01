@@ -118,9 +118,8 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
       setIsGeocoding(true);
       const geocoder = new window.google.maps.Geocoder();
 
-      // Build full address for geocoding
+      // Build address for geocoding — use street + city (skip barangay to let Google find the actual street location)
       const parts = [street.trim()];
-      if (barangay.trim()) parts.push(barangay.trim());
       parts.push(city);
       if (province) parts.push(province);
       parts.push('Philippines');
@@ -145,37 +144,11 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
         if (status === 'OK' && results[0]) {
           const loc = results[0].geometry.location;
           const resolved = { lat: loc.lat(), lng: loc.lng() };
-          const formattedAddress = results[0].formatted_address.toLowerCase();
-          const streetWords = street.trim().toLowerCase().split(/\s+/).filter(w => w.length > 2);
-
-          // Check if the key words from the typed street appear in Google's result
-          // This handles abbreviations like "Avenue" vs "Ave", "Street" vs "St"
-          const mainWord = streetWords.length > 0 ? streetWords[0] : street.trim().toLowerCase();
-          if (!formattedAddress.includes(mainWord)) {
-            setStreetError('Street not found on Google Maps. Please enter a valid street name.');
-            onLocationResolved(barangayLocationRef.current || resolved);
-            return;
-          }
-
-          // Safety check: if result is too far from barangay (>5km), street is invalid
-          if (barangayLocationRef.current) {
-            const dist = Math.sqrt(
-              Math.pow((resolved.lat - barangayLocationRef.current.lat) * 111, 2) +
-              Math.pow((resolved.lng - barangayLocationRef.current.lng) * 111 * Math.cos(resolved.lat * Math.PI / 180), 2)
-            );
-            if (dist > 5) {
-              setStreetError('Street not found in this area. Please check the street name.');
-              onLocationResolved(barangayLocationRef.current);
-              return;
-            }
-          }
-
           setStreetError('');
           onLocationResolved(resolved);
         } else if (barangayLocationRef.current) {
-          // Geocode failed — street not recognized
-          setIsGeocoding(false);
-          setStreetError('Street not found on Google Maps. Please enter a valid street name.');
+          // Geocode completely failed — use barangay location as fallback
+          setStreetError('');
           onLocationResolved(barangayLocationRef.current);
         }
       });

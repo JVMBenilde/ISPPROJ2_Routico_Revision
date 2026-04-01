@@ -499,37 +499,41 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
 
     // Get actual road route if both locations exist
     if (formData.pickupLocation && formData.dropoffLocation) {
-      getDirections(formData.pickupLocation, formData.dropoffLocation);
+      getDirections(formData.pickupAddress, formData.dropoffAddress, formData.pickupLocation, formData.dropoffLocation);
     }
   };
 
-  const getDirections = (origin, destination) => {
+  const getDirections = (pickupAddress, dropoffAddress, originCoords, destCoords) => {
     if (!window.google || !window.google.maps) {
       console.error('Google Maps not available');
       return;
     }
-    
+
     // Initialize Directions service if not already done
     if (!window.DirectionsService) {
       window.DirectionsService = new window.google.maps.DirectionsService();
     }
-    
+
     if (!window.DirectionsRenderer) {
       window.DirectionsRenderer = new window.google.maps.DirectionsRenderer({
         map: window.orderMap,
-        suppressMarkers: true, // We'll add our own markers
+        suppressMarkers: true,
         preserveViewport: false
       });
     }
-    
+
+    // Use full address strings for better street-level precision
+    const origin = pickupAddress || new window.google.maps.LatLng(originCoords.lat, originCoords.lng);
+    const destination = dropoffAddress || new window.google.maps.LatLng(destCoords.lat, destCoords.lng);
+
     console.log('Getting directions from', origin, 'to', destination);
-    
+
     window.DirectionsService.route(
       {
-        origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-        destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+        origin,
+        destination,
         travelMode: window.google.maps.TravelMode.DRIVING,
-        region: 'ph', // Philippines
+        region: 'ph',
         unitSystem: window.google.maps.UnitSystem.METRIC
       },
       (result, status) => {
@@ -565,10 +569,10 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
       const timer = setTimeout(() => {
         updateMap();
       }, 300);
-      
+
       return () => clearTimeout(timer);
     }
-  }, [formData.pickupLocation, formData.dropoffLocation]);
+  }, [formData.pickupLocation, formData.dropoffLocation, formData.pickupAddress, formData.dropoffAddress]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -1457,11 +1461,65 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 flex gap-4 text-xs text-gray-400">
-                  <span>Total stops: {optimizationResult.total_stops}</span>
-                  <span>Est. distance: {optimizationResult.estimated_distance_km} km</span>
-                  <span className="text-green-400">~{optimizationResult.estimated_savings_percent}% savings</span>
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="bg-gray-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">Stops</p>
+                    <p className="text-sm font-bold text-white">{optimizationResult.total_stops}</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">Distance</p>
+                    <p className="text-sm font-bold text-white">{optimizationResult.estimated_distance_km} km</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">ETA</p>
+                    <p className="text-sm font-bold text-white">
+                      {optimizationResult.eta ? `${optimizationResult.eta.duration_traffic_minutes} min` : 'N/A'}
+                    </p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">Savings</p>
+                    <p className="text-sm font-bold text-green-400">~{optimizationResult.estimated_savings_percent}%</p>
+                  </div>
                 </div>
+
+                {/* Traffic & Route Info */}
+                {optimizationResult.eta && (
+                  <div className="mt-2 p-2 bg-gray-800/50 rounded-lg border border-gray-700">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-400">Route:</span>
+                      <span className="text-white font-medium">{optimizationResult.eta.summary || 'Via optimized path'}</span>
+                    </div>
+                    <div className="flex items-center gap-4 mt-1 text-xs">
+                      <span className="text-gray-400">Without traffic: <span className="text-white">{optimizationResult.eta.duration_minutes} min</span></span>
+                      <span className="text-gray-400">With traffic: <span className="text-yellow-400 font-medium">{optimizationResult.eta.duration_traffic_minutes} min</span></span>
+                    </div>
+                    {optimizationResult.eta.legs && optimizationResult.eta.legs.length > 1 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-[10px] text-gray-500 uppercase">Leg Breakdown:</p>
+                        {optimizationResult.eta.legs.map((leg, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
+                            <span className="w-4 h-4 bg-purple-600 text-white rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0">{i + 1}</span>
+                            <span className="truncate flex-1">{leg.distance} &middot; {leg.duration_traffic}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Alternative Routes */}
+                {optimizationResult.alternative_routes && optimizationResult.alternative_routes.length > 0 && (
+                  <div className="mt-2 p-2 bg-gray-800/50 rounded-lg border border-blue-500/20">
+                    <p className="text-xs text-blue-400 font-medium mb-1">Alternative Routes Available:</p>
+                    {optimizationResult.alternative_routes.map((alt, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs text-gray-400 py-1">
+                        <span>{alt.summary || `Alternative ${i + 1}`}</span>
+                        <span className="text-white">{alt.distance_km} km &middot; {alt.duration_traffic_minutes} min</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div ref={optimizationMapRef} style={{ width: '100%', height: 350, borderRadius: 8, border: '1px solid #334155', background: '#232946', marginTop: 12 }} />
 
                 {/* Assign Driver to Route */}

@@ -60,6 +60,79 @@ function totalRouteDistance(locations) {
   return total;
 }
 
+// Get real road distance, ETA, and traffic info from Google Directions API
+async function getDirectionsInfo(locations) {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey || locations.length < 2) return null;
+
+  try {
+    const origin = `${locations[0].lat},${locations[0].lng}`;
+    const destination = `${locations[locations.length - 1].lat},${locations[locations.length - 1].lng}`;
+    const waypoints = locations.slice(1, -1).map(l => `${l.lat},${l.lng}`).join('|');
+
+    let url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=driving&departure_time=now&traffic_model=best_guess&alternatives=true&region=ph&key=${apiKey}`;
+    if (waypoints) {
+      url += `&waypoints=${encodeURIComponent(waypoints)}`;
+    }
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status !== 'OK' || !data.routes || data.routes.length === 0) {
+      console.warn('Directions API failed:', data.status);
+      return null;
+    }
+
+    // Parse primary route
+    const primaryRoute = data.routes[0];
+    const legs = primaryRoute.legs;
+    const totalDistance = legs.reduce((sum, leg) => sum + leg.distance.value, 0) / 1000; // meters to km
+    const totalDuration = legs.reduce((sum, leg) => sum + leg.duration.value, 0); // seconds
+    const totalDurationTraffic = legs.reduce((sum, leg) => sum + (leg.duration_in_traffic?.value || leg.duration.value), 0);
+
+    const result = {
+      primary: {
+        distance_km: Math.round(totalDistance * 10) / 10,
+        duration_minutes: Math.round(totalDuration / 60),
+        duration_traffic_minutes: Math.round(totalDurationTraffic / 60),
+        duration_text: legs.map(l => l.duration.text).join(' + '),
+        traffic_text: legs.map(l => l.duration_in_traffic?.text || l.duration.text).join(' + '),
+        summary: primaryRoute.summary || '',
+        legs: legs.map(leg => ({
+          distance: leg.distance.text,
+          duration: leg.duration.text,
+          duration_traffic: leg.duration_in_traffic?.text || leg.duration.text,
+          start: leg.start_address,
+          end: leg.end_address
+        }))
+      },
+      alternatives: []
+    };
+
+    // Parse alternative routes (if available and no waypoints — Directions API doesn't return alternatives with waypoints)
+    if (data.routes.length > 1) {
+      for (let i = 1; i < Math.min(data.routes.length, 3); i++) {
+        const altRoute = data.routes[i];
+        const altLegs = altRoute.legs;
+        const altDist = altLegs.reduce((sum, leg) => sum + leg.distance.value, 0) / 1000;
+        const altDur = altLegs.reduce((sum, leg) => sum + leg.duration.value, 0);
+        const altDurTraffic = altLegs.reduce((sum, leg) => sum + (leg.duration_in_traffic?.value || leg.duration.value), 0);
+        result.alternatives.push({
+          distance_km: Math.round(altDist * 10) / 10,
+          duration_minutes: Math.round(altDur / 60),
+          duration_traffic_minutes: Math.round(altDurTraffic / 60),
+          summary: altRoute.summary || `Alternative ${i}`
+        });
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Directions API error:', error.message);
+    return null;
+  }
+}
+
 // Geocode an address using Google Maps Geocoding API
 async function geocodeAddress(address) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -187,6 +260,13 @@ router.post('/optimize', requirePerm('optimize_routes'), async (req, res) => {
     // Filter out depot from the result for DB storage
     const optimizedOrders = optimizedRoute.filter(s => !s.is_depot);
 
+    // Get real road distance, ETA, and traffic data from Google Directions API
+    console.log('Fetching Directions API for road distance and ETA...');
+    const directionsInfo = await getDirectionsInfo(optimizedRoute);
+
+    // Use Directions API distance if available, otherwise fallback to Haversine
+    const roadDistance = directionsInfo ? directionsInfo.primary.distance_km : optimizedDistance;
+
     // Save optimization result
     const startLocation = optimizedOrders[0]?.pickup_location || '';
     const destination = optimizedOrders[optimizedOrders.length - 1]?.drop_off_location || '';
@@ -196,10 +276,12 @@ router.post('/optimize', requirePerm('optimize_routes'), async (req, res) => {
       drop_off_location: o.drop_off_location
     })));
 
+    const estimatedTime = directionsInfo ? `${Math.floor(directionsInfo.primary.duration_traffic_minutes / 60)}:${String(directionsInfo.primary.duration_traffic_minutes % 60).padStart(2, '0')}:00` : null;
+
     const [result] = await db.query(
-      `INSERT INTO routeoptimization (start_location, destination, estimated_distance, optimized_route)
-       VALUES (?, ?, ?, ?)`,
-      [startLocation, destination, optimizedDistance.toFixed(2), optimizedRouteJson]
+      `INSERT INTO routeoptimization (start_location, destination, estimated_distance, optimized_route, estimated_time)
+       VALUES (?, ?, ?, ?, ?)`,
+      [startLocation, destination, roadDistance.toFixed ? roadDistance.toFixed(2) : roadDistance, optimizedRouteJson, estimatedTime]
     );
 
     const optimizationId = result.insertId;
@@ -231,6 +313,11 @@ router.post('/optimize', requirePerm('optimize_routes'), async (req, res) => {
       }))
     ];
 
+    // Calculate savings using road distance
+    const roadSavingsPercent = directionsInfo && originalDistance > 0
+      ? Math.round(((originalDistance - optimizedDistance) / originalDistance) * 100)
+      : savingsPercent;
+
     res.json({
       optimization_id: optimizationId,
       original_order: orders.map(o => ({
@@ -241,9 +328,20 @@ router.post('/optimize', requirePerm('optimize_routes'), async (req, res) => {
       })),
       optimized_order: fullOptimizedOrder,
       total_stops: fullOptimizedOrder.length,
-      estimated_distance_km: optimizedDistance.toFixed(1),
+      estimated_distance_km: (directionsInfo ? directionsInfo.primary.distance_km : optimizedDistance).toFixed ? (directionsInfo ? directionsInfo.primary.distance_km : optimizedDistance).toFixed(1) : String(directionsInfo ? directionsInfo.primary.distance_km : optimizedDistance),
       original_distance_km: originalDistance.toFixed(1),
-      estimated_savings_percent: Math.max(0, savingsPercent)
+      estimated_savings_percent: Math.max(0, roadSavingsPercent),
+      // New fields for ETA, traffic, and alternatives
+      eta: directionsInfo ? {
+        duration_minutes: directionsInfo.primary.duration_minutes,
+        duration_traffic_minutes: directionsInfo.primary.duration_traffic_minutes,
+        duration_text: directionsInfo.primary.duration_text,
+        traffic_text: directionsInfo.primary.traffic_text,
+        summary: directionsInfo.primary.summary,
+        legs: directionsInfo.primary.legs
+      } : null,
+      alternative_routes: directionsInfo ? directionsInfo.alternatives : [],
+      road_distance: directionsInfo ? true : false
     });
   } catch (error) {
     console.error('Error optimizing route:', error);

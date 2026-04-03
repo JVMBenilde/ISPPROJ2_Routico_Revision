@@ -1935,14 +1935,14 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                     return (
                       <>
                         {/* Progress tracker */}
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center justify-between mb-4 overflow-x-auto">
                           {statusFlow.map((s, i) => {
                             const isActive = s === selectedOrder.order_status && !isCancelled;
                             const isPast = !isCancelled && currentIdx >= 0 && i < currentIdx;
                             return (
-                              <div key={s} className="flex items-center flex-1">
+                              <div key={s} className="flex items-center flex-1 min-w-0">
                                 <div className="flex flex-col items-center">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold border-2 transition-all ${
                                     isActive ? `${statusColors[s]} border-white text-white shadow-lg shadow-${s === 'completed' ? 'green' : 'blue'}-500/30` :
                                     isPast ? 'bg-green-600 border-green-400 text-white' :
                                     'bg-gray-700 border-gray-600 text-gray-500'
@@ -1970,7 +1970,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                         )}
 
                         {/* Current status + action buttons */}
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-gray-400">Current:</span>
                             <span className={`px-3 py-1 text-xs font-bold rounded-full ${getStatusColor(selectedOrder.order_status)}`}>
@@ -1978,11 +1978,11 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                             </span>
                           </div>
                           {allowed.length > 0 ? (
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                               {allowed.filter(s => s !== 'cancelled').map(s => (
                                 <button
                                   key={s}
-                                  className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${statusColors[s]} hover:opacity-90 text-white shadow-md disabled:opacity-50`}
+                                  className={`px-3 sm:px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${statusColors[s]} hover:opacity-90 text-white shadow-md disabled:opacity-50`}
                                   onClick={() => handleStatusChange(selectedOrder.order_id, s)}
                                   disabled={updatingStatus}
                                 >
@@ -1991,7 +1991,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                               ))}
                               {allowed.includes('cancelled') && (
                                 <button
-                                  className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all bg-red-800 hover:bg-red-700 text-red-200 border border-red-600 disabled:opacity-50"
+                                  className="px-3 sm:px-4 py-1.5 text-xs font-semibold rounded-lg transition-all bg-red-800 hover:bg-red-700 text-red-200 border border-red-600 disabled:opacity-50"
                                   onClick={() => handleStatusChange(selectedOrder.order_id, 'cancelled')}
                                   disabled={updatingStatus}
                                 >
@@ -2007,7 +2007,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                     );
                   })()}
                 </div>
-                <div className="grid grid-cols-1 gap-2 text-gray-200 mb-6">
+                <div className="grid grid-cols-1 gap-2 text-gray-200 text-sm mb-6 break-words">
                   <div><b>Status:</b> <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedOrder.order_status)}`}>{selectedOrder.order_status}</span></div>
                   <div><b>Customer:</b> {selectedOrder.customer_name}</div>
                   <div><b>Pickup:</b> {selectedOrder.pickup_location}</div>

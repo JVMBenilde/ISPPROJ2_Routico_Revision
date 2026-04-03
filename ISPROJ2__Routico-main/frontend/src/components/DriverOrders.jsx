@@ -9,7 +9,10 @@ const DriverOrders = () => {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [expandedOrder, setExpandedOrder] = useState(null);
+  const [routeDetails, setRouteDetails] = useState({});
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState({});
   const mapRefs = useRef({});
+  const directionsRenderers = useRef({});
 
   useEffect(() => {
     fetchOrders();
@@ -47,7 +50,7 @@ const DriverOrders = () => {
     }
   };
 
-  // Initialize map for an order
+  // Initialize map for an order with route alternatives
   const initMapForOrder = useCallback((orderId) => {
     const order = orders.find(o => o.order_id === orderId);
     const mapEl = mapRefs.current[orderId];
@@ -70,16 +73,63 @@ const DriverOrders = () => {
 
       mapEl.innerHTML = '';
       const map = new window.google.maps.Map(mapEl, { zoom: 12, center: pickup });
+
+      // Add live traffic layer
+      const trafficLayer = new window.google.maps.TrafficLayer();
+      trafficLayer.setMap(map);
+
       new window.google.maps.Marker({ position: pickup, map, label: 'P', title: 'Pickup', icon: { url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png' } });
       new window.google.maps.Marker({ position: dropoff, map, label: 'D', title: 'Dropoff', icon: { url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png' } });
 
       const ds = new window.google.maps.DirectionsService();
       const dr = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: true });
-      ds.route({ origin: pickup, destination: dropoff, travelMode: window.google.maps.TravelMode.DRIVING, region: 'ph' }, (result, status) => {
-        if (status === 'OK') dr.setDirections(result);
+      directionsRenderers.current[orderId] = { dr, map };
+
+      ds.route({
+        origin: pickup,
+        destination: dropoff,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        provideRouteAlternatives: true,
+        drivingOptions: { departureTime: new Date(), trafficModel: 'bestguess' },
+        region: 'ph'
+      }, (result, status) => {
+        if (status === 'OK') {
+          dr.setDirections(result);
+
+          // Parse route alternatives
+          const routes = result.routes.map((route, idx) => {
+            const leg = route.legs[0];
+            const durationSec = leg.duration_in_traffic ? leg.duration_in_traffic.value : leg.duration.value;
+            return {
+              index: idx,
+              summary: route.summary,
+              distance_km: (leg.distance.value / 1000).toFixed(1),
+              duration_minutes: Math.round(durationSec / 60),
+              distance_text: leg.distance.text,
+              duration_text: leg.duration_in_traffic ? leg.duration_in_traffic.text : leg.duration.text
+            };
+          });
+
+          setRouteDetails(prev => ({ ...prev, [orderId]: { routes, directionsResult: result } }));
+          setSelectedRouteIndex(prev => ({ ...prev, [orderId]: 0 }));
+        }
       });
     })();
   }, [orders]);
+
+  // Handle route selection change
+  const handleRouteSelect = (orderId, index) => {
+    setSelectedRouteIndex(prev => ({ ...prev, [orderId]: index }));
+    const renderer = directionsRenderers.current[orderId];
+    if (renderer?.dr) {
+      renderer.dr.setRouteIndex(index);
+    }
+    // Update displayed route details
+    const details = routeDetails[orderId];
+    if (details) {
+      setRouteDetails(prev => ({ ...prev, [orderId]: { ...prev[orderId] } }));
+    }
+  };
 
   // Load Google Maps script
   useEffect(() => {
@@ -210,10 +260,70 @@ const DriverOrders = () => {
         </div>
       </div>
 
-      {/* Expanded Map */}
+      {/* Expanded Route Details + Map */}
       {expandedOrder === order.order_id && (
-        <div className="border-t border-gray-700 p-4">
-          <p className="text-sm text-blue-400 font-medium mb-2">Route Preview:</p>
+        <div className="border-t border-gray-700 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-blue-400 font-semibold">Route Preview:</p>
+            {routeDetails[order.order_id] && <span className="text-green-400 text-xs animate-pulse">● Live traffic</span>}
+          </div>
+
+          {/* Stats Cards */}
+          {routeDetails[order.order_id]?.routes?.length > 0 && (() => {
+            const idx = selectedRouteIndex[order.order_id] || 0;
+            const route = routeDetails[order.order_id].routes[idx];
+            return (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-gray-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">Distance</p>
+                    <p className="text-sm font-bold text-white">{route.distance_km} km</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">ETA (Real-time)</p>
+                    <p className="text-sm font-bold text-white">{route.duration_minutes} min</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">Route</p>
+                    <p className="text-sm font-bold text-white truncate" title={route.summary}>{route.summary}</p>
+                  </div>
+                </div>
+
+                {/* Route Selector */}
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase text-center mb-1">Select Route:</p>
+                  <div className="space-y-1">
+                    {routeDetails[order.order_id].routes.map((r, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleRouteSelect(order.order_id, i)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all border ${
+                          (selectedRouteIndex[order.order_id] || 0) === i
+                            ? 'bg-blue-600/20 border-blue-500 text-white'
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {(selectedRouteIndex[order.order_id] || 0) === i && (
+                            <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          <span className="truncate">
+                            {i === 0 ? '⚡ Shortest' : r.summary}
+                          </span>
+                          {i === 0 && <span className="text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full flex-shrink-0">Recommended</span>}
+                        </div>
+                        <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{r.distance_km} km · {r.duration_minutes} min</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* Map */}
           <div
             ref={el => { mapRefs.current[order.order_id] = el; }}
             style={{ width: '100%', height: 300, borderRadius: 8, border: '1px solid #334155', background: '#232946' }}

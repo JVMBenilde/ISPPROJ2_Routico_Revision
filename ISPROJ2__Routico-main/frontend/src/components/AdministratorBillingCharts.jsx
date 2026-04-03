@@ -34,6 +34,10 @@ const AdministratorBillingCharts = () => {
 
   useEffect(() => {
     if (user) fetchBillingData();
+
+    const handleBillingUpdate = () => fetchBillingData();
+    window.addEventListener('billingUpdated', handleBillingUpdate);
+    return () => window.removeEventListener('billingUpdated', handleBillingUpdate);
   }, [user]);
 
   const fetchBillingData = async () => {
@@ -41,7 +45,7 @@ const AdministratorBillingCharts = () => {
     setError(null);
     try {
       const token = getToken();
-      const pendingResponse = await fetch('http://localhost:3001/api/auth/subscription/pending-payments', {
+      const pendingResponse = await fetch('http://localhost:3001/api/auth/admin/billing-statements/pending', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -79,16 +83,17 @@ const AdministratorBillingCharts = () => {
     }
   };
 
-  const handleApprovePayment = async (subscriptionId) => {
+  const handleApprovePayment = async (statementId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/subscription/${subscriptionId}/approve`, {
-        method: 'PUT',
+      const response = await fetch(`http://localhost:3001/api/auth/admin/billing-statements/${statementId}/approve`, {
+        method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
       if (response.ok) {
         toast.success('Payment approved successfully!');
         fetchBillingData();
+        window.dispatchEvent(new Event('billingUpdated'));
       } else {
         const errorData = await response.json();
         toast.error(`Error approving payment: ${errorData.error}`);
@@ -99,16 +104,17 @@ const AdministratorBillingCharts = () => {
     }
   };
 
-  const handleRejectPayment = async (subscriptionId) => {
+  const handleRejectPayment = async (statementId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/subscription/${subscriptionId}/reject`, {
-        method: 'PUT',
+      const response = await fetch(`http://localhost:3001/api/auth/admin/billing-statements/${statementId}/reject`, {
+        method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
       if (response.ok) {
         toast.success('Payment rejected successfully!');
         fetchBillingData();
+        window.dispatchEvent(new Event('billingUpdated'));
       } else {
         const errorData = await response.json();
         toast.error(`Error rejecting payment: ${errorData.error}`);
@@ -119,10 +125,10 @@ const AdministratorBillingCharts = () => {
     }
   };
 
-  const handleDownloadPaymentProof = async (subscriptionId, ownerName) => {
+  const handleDownloadPaymentProof = async (statementId, ownerName) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/subscription/${subscriptionId}/document`, {
+      const response = await fetch(`http://localhost:3001/api/auth/admin/billing-statements/${statementId}/payment-proof`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -168,7 +174,7 @@ const AdministratorBillingCharts = () => {
       <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {[1, 2].map(i => (
-            <div key={i} className="bg-gray-800 shadow rounded-lg p-6 border border-gray-700">
+            <div key={i} className="bg-gray-800 shadow rounded-lg p-4 sm:p-6 border border-gray-700">
               <div className="animate-pulse">
                 <div className="h-6 bg-gray-700 rounded w-3/4 mb-4"></div>
                 <div className="h-64 bg-gray-700 rounded"></div>
@@ -194,7 +200,7 @@ const AdministratorBillingCharts = () => {
       <h2 className="text-2xl font-bold text-white">Billing & Payments Analytics</h2>
 
       {/* Revenue Overview */}
-      <div className="bg-gray-800 shadow rounded-lg p-6 border border-gray-700">
+      <div className="bg-gray-800 shadow rounded-lg p-4 sm:p-6 border border-gray-700">
         <div className="mb-4">
           <h3 className="text-lg font-medium text-white">Revenue & Billing Overview</h3>
           <p className="text-sm text-gray-400">Key billing metrics and revenue statistics</p>
@@ -223,7 +229,7 @@ const AdministratorBillingCharts = () => {
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Payment Status Distribution */}
-        <div className="bg-gray-800 shadow rounded-lg p-6 border border-gray-700">
+        <div className="bg-gray-800 shadow rounded-lg p-4 sm:p-6 border border-gray-700">
           <div className="mb-4">
             <h3 className="text-lg font-medium text-white">Payment Status Distribution</h3>
             <p className="text-sm text-gray-400">Breakdown of payment statuses across platform</p>
@@ -234,11 +240,11 @@ const AdministratorBillingCharts = () => {
                 data={paymentStatusData}
                 cx="50%"
                 cy="45%"
-                innerRadius={55}
-                outerRadius={90}
+                innerRadius={45}
+                outerRadius={75}
                 paddingAngle={3}
                 dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
               >
                 {paymentStatusData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
@@ -251,7 +257,7 @@ const AdministratorBillingCharts = () => {
         </div>
 
         {/* Revenue & Subscription Growth Trend */}
-        <div className="bg-gray-800 shadow rounded-lg p-6 border border-gray-700">
+        <div className="bg-gray-800 shadow rounded-lg p-4 sm:p-6 border border-gray-700">
           <div className="mb-4">
             <h3 className="text-lg font-medium text-white">Revenue & Subscription Growth</h3>
             <p className="text-sm text-gray-400">Weekly revenue and subscription growth trends</p>
@@ -278,7 +284,7 @@ const AdministratorBillingCharts = () => {
       </div>
 
       {/* Key Metrics Summary */}
-      <div className="bg-gray-800 shadow rounded-lg p-6 border border-gray-700">
+      <div className="bg-gray-800 shadow rounded-lg p-4 sm:p-6 border border-gray-700">
         <div className="mb-4">
           <h3 className="text-lg font-medium text-white">Billing Key Metrics</h3>
           <p className="text-sm text-gray-400">Important billing metrics at a glance</p>
@@ -314,27 +320,28 @@ const AdministratorBillingCharts = () => {
             <div className="flow-root">
               <ul className="-my-5 divide-y divide-gray-700">
                 {pendingPayments.map((payment) => (
-                  <li key={payment.subscription_id} className="py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
+                  <li key={payment.statement_id || payment.subscription_id} className="py-4">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center space-x-3">
                         <div className="flex-shrink-0">
                           <div className="h-10 w-10 bg-gray-700 rounded-full flex items-center justify-center">
                             <span className="text-sm font-medium text-white">
-                              {payment.full_name.charAt(0)}
+                              {(payment.full_name || payment.company_name || '?').charAt(0)}
                             </span>
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{payment.full_name}</p>
+                          <p className="text-sm font-medium text-white truncate">{payment.company_name || payment.full_name}</p>
                           <p className="text-sm text-gray-300 truncate">{payment.email}</p>
                           <p className="text-xs text-gray-400">
-                            Payment Date: {new Date(payment.payment_date).toLocaleDateString()}
+                            {payment.statement_period ? `Period: ${payment.statement_period}` : payment.payment_date ? `Payment Date: ${new Date(payment.payment_date).toLocaleDateString()}` : ''}
+                            {payment.total_due ? ` · ₱${parseFloat(payment.total_due).toFixed(2)}` : ''}
                           </p>
                         </div>
                       </div>
-                      <div className="flex space-x-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={() => handleDownloadPaymentProof(payment.subscription_id, payment.full_name)}
+                          onClick={() => handleDownloadPaymentProof(payment.statement_id || payment.subscription_id, payment.full_name)}
                           className="inline-flex items-center px-3 py-1 border border-gray-600 text-xs font-medium rounded text-gray-300 bg-gray-700 hover:bg-gray-600"
                         >
                           <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -343,7 +350,7 @@ const AdministratorBillingCharts = () => {
                           View Proof
                         </button>
                         <button
-                          onClick={() => handleApprovePayment(payment.subscription_id)}
+                          onClick={() => handleApprovePayment(payment.statement_id || payment.subscription_id)}
                           className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700"
                         >
                           <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -352,7 +359,7 @@ const AdministratorBillingCharts = () => {
                           Approve
                         </button>
                         <button
-                          onClick={() => handleRejectPayment(payment.subscription_id)}
+                          onClick={() => handleRejectPayment(payment.statement_id || payment.subscription_id)}
                           className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700"
                         >
                           <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

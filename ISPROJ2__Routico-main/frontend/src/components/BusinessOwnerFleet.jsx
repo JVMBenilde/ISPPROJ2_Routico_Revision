@@ -423,7 +423,7 @@ const BusinessOwnerFleet = () => {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[#111827] border border-gray-800/60 rounded-2xl p-5">
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 rounded-xl bg-blue-500/15 flex items-center justify-center">

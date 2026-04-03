@@ -1,6 +1,7 @@
 import { createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { auth } from '../config/firebase';
+import { registerPushNotifications, unregisterPushNotifications } from '../services/pushNotifications';
 
 const AuthContext = createContext();
 
@@ -146,6 +147,12 @@ export const AuthProvider = ({ children }) => {
           permissions: data.user.permissions || []
         }));
 
+        try {
+          await registerPushNotifications(data.token);
+        } catch (pushError) {
+          console.error('Push notification registration failed:', pushError);
+        }
+
         return { user: { email } };
       }
 
@@ -160,6 +167,14 @@ export const AuthProvider = ({ children }) => {
   // Sign out function
   const logout = async () => {
     try {
+      const currentToken = jwt;
+
+      try {
+        await unregisterPushNotifications(currentToken);
+      } catch (pushError) {
+        console.error('Push token deactivation failed:', pushError);
+      }
+
       sessionStorage.removeItem('jwtUser');
       await signOut(auth);
       setUser(null);

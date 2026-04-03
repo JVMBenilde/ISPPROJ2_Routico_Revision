@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requirePerm } = require('../middleware/auth');
+const NotificationService = require('../services/notificationService');
 
 // Get all issues (role-based: admin sees all, driver sees own, business owner sees own + their drivers')
 router.get('/', requirePerm('view_issues'), async (req, res) => {
@@ -82,6 +83,7 @@ router.get('/categories', requirePerm('view_issues'), async (req, res) => {
 router.post('/', requirePerm('manage_issues'), async (req, res) => {
   try {
     const db = req.app.locals.db;
+    const notificationService = new NotificationService(db);
     const userId = req.user.user_id;
     const { categoryId, description } = req.body;
 
@@ -105,32 +107,10 @@ router.post('/', requirePerm('manage_issues'), async (req, res) => {
       [result.insertId]
     );
 
-    // Notify relevant parties about the new issue
-    if (req.app.locals.notifications) {
-      const issueId = result.insertId;
-      const shortDesc = description.length > 60 ? description.substring(0, 60) + '...' : description;
-
-      // If reporter is a driver, notify their business owner
-      const [driverInfo] = await db.query(
-        'SELECT owner_id FROM drivers WHERE user_id = ?', [userId]
-      );
-      if (driverInfo.length > 0) {
-        req.app.locals.notifications.createForBusinessOwner(
-          driverInfo[0].owner_id,
-          `New issue reported: ${shortDesc}`,
-          'issue_report', issueId, 'issue'
-        ).catch(err => console.error('Notification error:', err));
-      }
-
-      // Notify all administrators
-      const [admins] = await db.query("SELECT user_id FROM users WHERE role = 'administrator'");
-      for (const admin of admins) {
-        req.app.locals.notifications.create(
-          admin.user_id,
-          `New issue #${issueId} reported`,
-          'issue_report', issueId, 'issue'
-        ).catch(err => console.error('Notification error:', err));
-      }
+    try {
+      await notificationService.notifyIssueReported({ issueId: result.insertId });
+    } catch (notificationError) {
+      console.error('Issue report notification error:', notificationError);
     }
 
     res.status(201).json(newIssue[0]);

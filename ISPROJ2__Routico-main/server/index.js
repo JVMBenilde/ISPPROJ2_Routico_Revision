@@ -18,8 +18,8 @@ const { runMechanicsMigration } = require('./migrations/005_mechanics');
 const { runPartnerShopsMigration } = require('./migrations/006_partner_shops');
 const { runIssueCategoriesMigration } = require('./migrations/007_issue_categories');
 const { runNotificationsTrackingMigration } = require('./migrations/008_notifications_tracking');
+const { runNotificationDeviceTokensMigration } = require('./migrations/007_notification_device_tokens');
 const NotificationService = require('./services/notificationService');
-const SMSService = require('./services/smsService');
 const AuditLogService = require('./services/auditLogService');
 const path = require('path');
 
@@ -97,6 +97,7 @@ const rolesRoutes = require('./routes/roles');
 const auditLogRoutes = require('./routes/auditLogs');
 const vehiclesRoutes = require('./routes/vehicles');
 const reportsRoutes = require('./routes/reports');
+const notificationsRoutes = require('./routes/notifications');
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/billing', billingRoutes);
@@ -109,7 +110,6 @@ app.use('/api/roles', rolesRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/vehicles', vehiclesRoutes);
 app.use('/api/reports', reportsRoutes);
-const notificationsRoutes = require('./routes/notifications');
 app.use('/api/notifications', notificationsRoutes);
 
 // Error handling middleware
@@ -182,6 +182,13 @@ async function startServer() {
       await runNotificationsTrackingMigration(db);
     } catch (migrationError) {
       console.error('Notifications/tracking migration error:', migrationError);
+    }
+
+    // Run notification device tokens migration
+    try {
+      await runNotificationDeviceTokensMigration(db);
+    } catch (migrationError) {
+      console.error('Notification device tokens migration error:', migrationError);
     }
 
     // Initialize audit log service

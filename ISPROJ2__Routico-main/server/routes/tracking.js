@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requirePerm, requireDriver } = require('../middleware/auth');
+const NotificationService = require('../services/notificationService');
 
 // Get status log for an order
 router.get('/:orderId/status-log', requirePerm('view_tracking'), async (req, res) => {
@@ -39,6 +40,7 @@ router.get('/:orderId/status-log', requirePerm('view_tracking'), async (req, res
 router.post('/:orderId/update-status', requirePerm('update_tracking'), async (req, res) => {
   try {
     const db = req.app.locals.db;
+    const notificationService = new NotificationService(db);
     const userId = req.user.user_id;
     const orderId = req.params.orderId;
     const { status, location, notes } = req.body;
@@ -61,6 +63,8 @@ router.post('/:orderId/update-status', requirePerm('update_tracking'), async (re
       [orderId, ownerId]
     );
     if (orderCheck.length === 0) return res.status(404).json({ error: 'Order not found' });
+
+    const previousStatus = orderCheck[0].order_status;
 
     // Update order status
     await db.query(
@@ -89,6 +93,17 @@ router.post('/:orderId/update-status', requirePerm('update_tracking'), async (re
         'INSERT INTO tracking (order_id, driver_id, current_location) VALUES (?, ?, ?)',
         [orderId, driverId, location]
       );
+    }
+
+    try {
+      await notificationService.notifyOrderStatusUpdate({
+        orderId: Number(orderId),
+        oldStatus: previousStatus,
+        newStatus: status,
+        actorRole: req.userRole || 'user'
+      });
+    } catch (notificationError) {
+      console.error('Tracking status notification error:', notificationError);
     }
 
     // Fetch updated order

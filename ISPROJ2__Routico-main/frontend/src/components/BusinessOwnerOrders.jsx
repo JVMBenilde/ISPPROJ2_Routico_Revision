@@ -70,7 +70,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
     if (!user) return;
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/drivers', {
+      const res = await fetch('/api/drivers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -87,7 +87,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
     setAssigningDriver(true);
     try {
       const token = getToken();
-      const res = await fetch(`http://localhost:3001/api/orders/${orderId}/assign`, {
+      const res = await fetch(`/api/orders/${orderId}/assign`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ driverId: driverId || null })
@@ -112,7 +112,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
     setUpdatingStatus(true);
     try {
       const token = getToken();
-      const res = await fetch(`http://localhost:3001/api/orders/${orderId}/status`, {
+      const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus })
@@ -140,7 +140,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
     setLoadingLog(true);
     try {
       const token = getToken();
-      const res = await fetch(`http://localhost:3001/api/tracking/${orderId}/status-log`, {
+      const res = await fetch(`/api/tracking/${orderId}/status-log`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -165,7 +165,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
     setOptimizing(true);
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/routes/optimize', {
+      const res = await fetch('/api/routes/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ orderIds: selectedForOptimize })
@@ -316,7 +316,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
       try {
         if (!user) return;
         const token = getToken();
-        const response = await fetch(`http://localhost:3001/api/orders${routeOptimizationOnly ? '?includeRouted=true' : ''}`, {
+        const response = await fetch(`/api/orders${routeOptimizationOnly ? '?includeRouted=true' : ''}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -718,7 +718,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         estimatedTime: formData.routeDuration // in minutes
       };
 
-      const response = await fetch('http://localhost:3001/api/orders', {
+      const response = await fetch('/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1262,10 +1262,8 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         const map = new window.google.maps.Map(orderDetailMapRef.current, { zoom: 12, center: pi });
         const trafficLayer = new window.google.maps.TrafficLayer();
         trafficLayer.setMap(map);
-        new window.google.maps.Marker({ position: pi, map, label: 'P', title: 'Pickup', icon: { url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png' }});
-        new window.google.maps.Marker({ position: di, map, label: 'D', title: 'Dropoff', icon: { url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png' }});
         const ds = new window.google.maps.DirectionsService();
-        const dr = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: true });
+        const dr = new window.google.maps.DirectionsRenderer({ map });
         ds.route({ origin: pi, destination: di, travelMode: window.google.maps.TravelMode.DRIVING, drivingOptions: { departureTime: new Date(), trafficModel: 'bestguess' }, region: 'ph' }, (result, status) => {
           if (status === 'OK') dr.setDirections(result);
         });
@@ -1768,7 +1766,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                         try {
                           const token = getToken();
                           const orderIds = optimizationResult.optimized_order.map(s => s.order_id);
-                          const res = await fetch('http://localhost:3001/api/routes/assign-driver', {
+                          const res = await fetch('/api/routes/assign-driver', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                             body: JSON.stringify({
@@ -1783,7 +1781,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                             // Clear optimization result and refresh orders
                             setOptimizationResult(null);
                             setSelectedRouteIndex(0);
-                            const ordersRes = await fetch(`http://localhost:3001/api/orders${routeOptimizationOnly ? '?includeRouted=true' : ''}`, {
+                            const ordersRes = await fetch(`/api/orders${routeOptimizationOnly ? '?includeRouted=true' : ''}`, {
                               headers: { 'Authorization': `Bearer ${token}` }
                             });
                             if (ordersRes.ok) setOrders(await ordersRes.json());
@@ -2136,7 +2134,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
                         onClick={async () => { setDeleteLoading(true); try {
                           const token = getToken();
                           const res = await fetch(
-                            `http://localhost:3001/api/orders/${selectedOrder.order_id}`,
+                            `/api/orders/${selectedOrder.order_id}`,
                             { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }
                           );
                           if (res.ok) {
@@ -2159,7 +2157,7 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
             ) : (
               <form className="space-y-4" onSubmit={async e => { e.preventDefault(); setEditLoading(true); try {
                 const token = getToken();
-                const res = await fetch(`http://localhost:3001/api/orders/${selectedOrder.order_id}`, {
+                const res = await fetch(`/api/orders/${selectedOrder.order_id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                   body: JSON.stringify({

@@ -280,6 +280,32 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
       [orderId]
     );
 
+    // Notify driver and business owner about status change
+    if (req.app.locals.notifications) {
+      const statusLabel = status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+      if (orders[0].assigned_driver_id) {
+        req.app.locals.notifications.createForDriver(
+          orders[0].assigned_driver_id,
+          `Order #${orderId} status changed to ${statusLabel}`,
+          'status_update', parseInt(orderId), 'order'
+        ).catch(err => console.error('Notification error:', err));
+      }
+      req.app.locals.notifications.createForBusinessOwner(
+        ownerId,
+        `Order #${orderId} status changed to ${statusLabel}`,
+        'status_update', parseInt(orderId), 'order'
+      ).catch(err => console.error('Notification error:', err));
+    }
+
+    // SMS to customer on delivered/completed
+    if (['delivered', 'completed'].includes(status) && req.app.locals.sms && updatedOrders[0]?.customer_phone) {
+      const statusLabel = status === 'delivered' ? 'delivered' : 'completed';
+      req.app.locals.sms.send(
+        updatedOrders[0].customer_phone,
+        `Routico: Your order #${orderId} has been ${statusLabel}. Thank you!`
+      ).catch(err => console.error('SMS error:', err));
+    }
+
     res.json(updatedOrders[0]);
   } catch (error) {
     console.error('Error updating order status:', error);
@@ -350,6 +376,26 @@ router.put('/:orderId/assign', requirePerm('assign_orders'), async (req, res) =>
        WHERE o.order_id = ?`,
       [orderId]
     );
+
+    // Notify the assigned driver
+    if (driverId && req.app.locals.notifications) {
+      req.app.locals.notifications.createForDriver(
+        driverId,
+        `You have been assigned to Order #${orderId}`,
+        'order_assignment', parseInt(orderId), 'order'
+      ).catch(err => console.error('Notification error:', err));
+
+      // SMS to driver
+      if (req.app.locals.sms) {
+        const [driverUser] = await db.query(
+          'SELECT u.phone FROM users u JOIN drivers d ON u.user_id = d.user_id WHERE d.driver_id = ?', [driverId]
+        );
+        console.log(`[SMS] Driver ${driverId} phone lookup:`, driverUser[0]?.phone || 'NO PHONE');
+        if (driverUser.length > 0 && driverUser[0].phone) {
+          req.app.locals.sms.send(driverUser[0].phone, `Routico: You have been assigned Order #${orderId}. Check your dashboard for details.`).catch(err => console.error('SMS error:', err));
+        }
+      }
+    }
 
     res.json(updatedOrders[0]);
   } catch (error) {

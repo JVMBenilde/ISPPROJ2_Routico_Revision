@@ -30,7 +30,7 @@ const BusinessOwnerBilling = () => {
         // Token not ready yet, will retry when user changes
         return;
       }
-      fetch('http://localhost:3001/api/stripe/verify-session', {
+      fetch('/api/stripe/verify-session', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -85,7 +85,7 @@ const BusinessOwnerBilling = () => {
     setError(null);
     try {
       const token = getToken();
-      const response = await fetch('http://localhost:3001/api/auth/billing-statements', {
+      const response = await fetch('/api/auth/billing-statements', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -107,7 +107,7 @@ const BusinessOwnerBilling = () => {
     setOrdersLoading(true);
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/billing-statements/orders/${period}`, {
+      const response = await fetch(`/api/auth/billing-statements/orders/${period}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -169,7 +169,7 @@ const BusinessOwnerBilling = () => {
       formData.append('amount', paymentAmount);
 
       const response = await fetch(
-        `http://localhost:3001/api/auth/billing-statements/${selectedStatement.statement_id}/payment-proof`,
+        `/api/auth/billing-statements/${selectedStatement.statement_id}/payment-proof`,
         {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
@@ -203,7 +203,7 @@ const BusinessOwnerBilling = () => {
     setError(null);
     try {
       const token = getToken();
-      const response = await fetch('http://localhost:3001/api/stripe/create-checkout-session', {
+      const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -231,7 +231,7 @@ const BusinessOwnerBilling = () => {
     try {
       const token = getToken();
       const response = await fetch(
-        `http://localhost:3001/api/billing/statement/${period}/download/csv`,
+        `/api/billing/statement/${period}/download/csv`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -262,7 +262,7 @@ const BusinessOwnerBilling = () => {
     try {
       const token = getToken();
       const response = await fetch(
-        `http://localhost:3001/api/billing/statement/${period}/download/pdf`,
+        `/api/billing/statement/${period}/download/pdf`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }

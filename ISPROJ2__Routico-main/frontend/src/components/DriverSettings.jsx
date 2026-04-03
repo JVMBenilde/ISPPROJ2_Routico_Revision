@@ -36,7 +36,7 @@ const DriverSettings = () => {
     setSubmitting(true);
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/auth/driver/change-password', {
+      const res = await fetch('/api/auth/driver/change-password', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

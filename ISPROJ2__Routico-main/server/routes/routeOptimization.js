@@ -390,6 +390,16 @@ router.post('/assign-driver', requirePerm('optimize_routes'), async (req, res) =
     }
 
     const driverName = `${driverResult[0].first_name} ${driverResult[0].last_name}`;
+
+    // Notify the assigned driver
+    if (req.app.locals.notifications) {
+      req.app.locals.notifications.createForDriver(
+        driverId,
+        `You have been assigned ${orderIds.length} orders on route #${routeId}`,
+        'order_assignment', parseInt(routeId), 'order'
+      ).catch(err => console.error('Notification error:', err));
+    }
+
     res.json({
       success: true,
       driver_id: driverId,

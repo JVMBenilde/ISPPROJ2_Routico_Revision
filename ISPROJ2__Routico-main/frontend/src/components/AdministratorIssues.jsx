@@ -18,7 +18,7 @@ const AdministratorIssues = () => {
     setLoading(true);
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/issues', {
+      const res = await fetch('/api/issues', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -37,7 +37,7 @@ const AdministratorIssues = () => {
   const handleStatusUpdate = async (issueId, newStatus) => {
     try {
       const token = getToken();
-      const res = await fetch(`http://localhost:3001/api/issues/${issueId}/status`, {
+      const res = await fetch(`/api/issues/${issueId}/status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

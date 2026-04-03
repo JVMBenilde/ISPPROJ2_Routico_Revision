@@ -25,8 +25,8 @@ const DriverIssues = () => {
 
     try {
       const [issuesRes, categoriesRes] = await Promise.all([
-        fetch('http://localhost:3001/api/issues', { headers }),
-        fetch('http://localhost:3001/api/issues/categories', { headers })
+        fetch('/api/issues', { headers }),
+        fetch('/api/issues/categories', { headers })
       ]);
 
       if (issuesRes.ok) setIssues(await issuesRes.json());
@@ -49,7 +49,7 @@ const DriverIssues = () => {
     setSubmitting(true);
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/issues', {
+      const res = await fetch('/api/issues', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -21,8 +21,8 @@ const AdministratorRoleManagement = () => {
     setError(null);
     try {
       const [rolesRes, permsRes] = await Promise.all([
-        fetch('http://localhost:3001/api/roles', { headers }),
-        fetch('http://localhost:3001/api/roles/permissions', { headers })
+        fetch('/api/roles', { headers }),
+        fetch('/api/roles/permissions', { headers })
       ]);
 
       if (!rolesRes.ok || !permsRes.ok) throw new Error('Failed to fetch roles data');
@@ -44,7 +44,7 @@ const AdministratorRoleManagement = () => {
   const handleCreateRole = async () => {
     setSaving(true);
     try {
-      const res = await fetch('http://localhost:3001/api/roles', {
+      const res = await fetch('/api/roles', {
         method: 'POST', headers, body: JSON.stringify(formData)
       });
       if (!res.ok) {
@@ -64,7 +64,7 @@ const AdministratorRoleManagement = () => {
   const handleUpdateRole = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/roles/${editingRole.role_id}`, {
+      const res = await fetch(`/api/roles/${editingRole.role_id}`, {
         method: 'PUT', headers,
         body: JSON.stringify({ display_name: formData.display_name, description: formData.description, dashboard_type: formData.dashboard_type })
       });
@@ -85,7 +85,7 @@ const AdministratorRoleManagement = () => {
   const handleDeleteRole = async (role) => {
     if (!confirm(`Delete role "${role.display_name}"? This cannot be undone.`)) return;
     try {
-      const res = await fetch(`http://localhost:3001/api/roles/${role.role_id}`, {
+      const res = await fetch(`/api/roles/${role.role_id}`, {
         method: 'DELETE', headers
       });
       if (!res.ok) {
@@ -108,7 +108,7 @@ const AdministratorRoleManagement = () => {
       : [...currentPermIds, permissionId];
 
     try {
-      const res = await fetch(`http://localhost:3001/api/roles/${roleId}/permissions`, {
+      const res = await fetch(`/api/roles/${roleId}/permissions`, {
         method: 'PUT', headers,
         body: JSON.stringify({ permission_ids: newPermIds })
       });

@@ -48,7 +48,7 @@ const BusinessOwnerDrivers = () => {
     setLoading(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('http://localhost:3001/api/drivers', { headers });
+      const response = await fetch('/api/drivers', { headers });
       if (!response.ok) throw new Error('Failed to fetch drivers');
       const data = await response.json();
       setDrivers(data);
@@ -132,7 +132,7 @@ const BusinessOwnerDrivers = () => {
 
       if (editingId) {
         // Update existing driver
-        const response = await fetch(`http://localhost:3001/api/drivers/${editingId}`, {
+        const response = await fetch(`/api/drivers/${editingId}`, {
           method: 'PUT',
           headers,
           body: JSON.stringify({
@@ -155,7 +155,7 @@ const BusinessOwnerDrivers = () => {
       } else {
         // Create new driver
         const fullPhone = `${countryCode}${formData.phone}`;
-        const response = await fetch('http://localhost:3001/api/drivers', {
+        const response = await fetch('/api/drivers', {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -234,7 +234,7 @@ const BusinessOwnerDrivers = () => {
     if (await confirm('Are you sure you want to remove this driver?')) {
       try {
         const headers = await getAuthHeaders();
-        const response = await fetch(`http://localhost:3001/api/drivers/${id}`, {
+        const response = await fetch(`/api/drivers/${id}`, {
           method: 'DELETE',
           headers
         });
@@ -275,7 +275,7 @@ const BusinessOwnerDrivers = () => {
   const handleStatusChange = async (driverId, newStatus) => {
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch(`http://localhost:3001/api/drivers/${driverId}/status`, {
+      const response = await fetch(`/api/drivers/${driverId}/status`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ status: newStatus })

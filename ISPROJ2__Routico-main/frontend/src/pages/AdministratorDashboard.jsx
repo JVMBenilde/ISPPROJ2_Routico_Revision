@@ -53,7 +53,7 @@ const AdministratorDashboard = () => {
     try {
       const token = getToken();
       // Fetch dashboard statistics
-      const statsResponse = await fetch('http://localhost:3001/api/auth/dashboard-stats', {
+      const statsResponse = await fetch('/api/auth/dashboard-stats', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -67,7 +67,7 @@ const AdministratorDashboard = () => {
       }
 
       // Fetch pending users
-      const pendingResponse = await fetch('http://localhost:3001/api/auth/pending-users', {
+      const pendingResponse = await fetch('/api/auth/pending-users', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -81,7 +81,7 @@ const AdministratorDashboard = () => {
       }
 
       // Fetch recent audit logs for activity timeline
-      const activityResponse = await fetch('http://localhost:3001/api/audit-logs?limit=10&page=1', {
+      const activityResponse = await fetch('/api/audit-logs?limit=10&page=1', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (activityResponse.ok) {
@@ -99,7 +99,7 @@ const AdministratorDashboard = () => {
   const handleApproveUser = async (userId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/user/${userId}/status`, {
+      const response = await fetch(`/api/auth/user/${userId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -129,7 +129,7 @@ const AdministratorDashboard = () => {
   const handleRejectUser = async (userId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/user/${userId}/status`, {
+      const response = await fetch(`/api/auth/user/${userId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -157,7 +157,7 @@ const AdministratorDashboard = () => {
   const handleViewDocument = async (userId, userName) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/document/${userId}`, {
+      const response = await fetch(`/api/auth/document/${userId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

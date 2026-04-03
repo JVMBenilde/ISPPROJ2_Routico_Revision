@@ -30,7 +30,7 @@ const fetchIssues = async () => {
     setLoading(true);
     try {
       const token = await getToken();
-      const res = await fetch('http://localhost:3001/api/issues', {
+      const res = await fetch('/api/issues', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -48,7 +48,7 @@ const fetchIssues = async () => {
   const fetchCategories = async () => {
     try {
       const token = await getToken();
-      const res = await fetch('http://localhost:3001/api/issues/categories', {
+      const res = await fetch('/api/issues/categories', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -70,7 +70,7 @@ const fetchIssues = async () => {
     setCreating(true);
     try {
       const token = await getToken();
-      const res = await fetch('http://localhost:3001/api/issues', {
+      const res = await fetch('/api/issues', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -103,7 +103,7 @@ const fetchIssues = async () => {
     setUpdatingStatus(true);
     try {
       const token = await getToken();
-      const res = await fetch(`http://localhost:3001/api/issues/${issueId}/status`, {
+      const res = await fetch(`/api/issues/${issueId}/status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

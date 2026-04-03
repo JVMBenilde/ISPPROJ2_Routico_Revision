@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requirePerm } = require('../middleware/auth');
+const { requirePerm, requireDriver } = require('../middleware/auth');
 
 // Get status log for an order
 router.get('/:orderId/status-log', requirePerm('view_tracking'), async (req, res) => {
@@ -141,6 +141,126 @@ router.get('/active/deliveries', requirePerm('view_tracking'), async (req, res) 
   } catch (error) {
     console.error('Error fetching active deliveries:', error);
     res.status(500).json({ error: 'Failed to fetch active deliveries' });
+  }
+});
+
+// Driver posts their current GPS location
+router.post('/location', requireDriver, async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const driverId = req.driverId;
+    const { latitude, longitude, orderId } = req.body;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({ error: 'latitude and longitude are required' });
+    }
+
+    const locationJson = JSON.stringify({ lat: latitude, lng: longitude });
+
+    await db.query(
+      'INSERT INTO tracking (order_id, driver_id, current_location, timestamp) VALUES (?, ?, ?, NOW())',
+      [orderId || null, driverId, locationJson]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving driver location:', error);
+    res.status(500).json({ error: 'Failed to save location' });
+  }
+});
+
+// Get latest location for all drivers belonging to a business owner
+router.get('/drivers/locations', requirePerm('view_tracking'), async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const userId = req.user.user_id;
+
+    const [ownerResult] = await db.query(
+      'SELECT owner_id FROM businessowners WHERE user_id = ?', [userId]
+    );
+    if (ownerResult.length === 0) return res.json([]);
+    const ownerId = ownerResult[0].owner_id;
+
+    const [drivers] = await db.query(
+      `SELECT d.driver_id, CONCAT(d.first_name, ' ', d.last_name) as driver_name,
+              t.current_location, t.timestamp as last_updated,
+              (SELECT o2.order_id FROM orders o2 WHERE o2.assigned_driver_id = d.driver_id AND o2.order_status IN ('assigned', 'in_transit') ORDER BY o2.order_updated_at DESC LIMIT 1) as current_order_id,
+              (SELECT o3.order_status FROM orders o3 WHERE o3.assigned_driver_id = d.driver_id AND o3.order_status IN ('assigned', 'in_transit') ORDER BY o3.order_updated_at DESC LIMIT 1) as order_status
+       FROM drivers d
+       LEFT JOIN tracking t ON t.driver_id = d.driver_id
+         AND t.tracking_id = (SELECT MAX(t2.tracking_id) FROM tracking t2 WHERE t2.driver_id = d.driver_id)
+       WHERE d.owner_id = ?
+       ORDER BY t.timestamp DESC`,
+      [ownerId]
+    );
+
+    const result = drivers
+      .filter(d => d.current_location)
+      .map(d => {
+        let loc = { lat: 0, lng: 0 };
+        try { loc = JSON.parse(d.current_location); } catch (e) {}
+        return {
+          driver_id: d.driver_id,
+          driver_name: d.driver_name,
+          latitude: loc.lat,
+          longitude: loc.lng,
+          last_updated: d.last_updated,
+          current_order_id: d.current_order_id,
+          order_status: d.order_status
+        };
+      });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching driver locations:', error);
+    res.status(500).json({ error: 'Failed to fetch driver locations' });
+  }
+});
+
+// Get specific driver's latest location
+router.get('/driver/:driverId/location', requirePerm('view_tracking'), async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const { driverId } = req.params;
+
+    const [rows] = await db.query(
+      `SELECT current_location, timestamp FROM tracking WHERE driver_id = ? ORDER BY timestamp DESC LIMIT 1`,
+      [driverId]
+    );
+
+    if (rows.length === 0) return res.json(null);
+
+    let loc = { lat: 0, lng: 0 };
+    try { loc = JSON.parse(rows[0].current_location); } catch (e) {}
+    res.json({ latitude: loc.lat, longitude: loc.lng, last_updated: rows[0].timestamp });
+  } catch (error) {
+    console.error('Error fetching driver location:', error);
+    res.status(500).json({ error: 'Failed to fetch driver location' });
+  }
+});
+
+// Get driver's location history (trail)
+router.get('/driver/:driverId/history', requirePerm('view_tracking'), async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const { driverId } = req.params;
+    const since = req.query.since || new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
+    const [rows] = await db.query(
+      'SELECT current_location, timestamp FROM tracking WHERE driver_id = ? AND timestamp >= ? ORDER BY timestamp ASC',
+      [driverId, since]
+    );
+
+    const trail = rows.map(r => {
+      let loc = { lat: 0, lng: 0 };
+      try { loc = JSON.parse(r.current_location); } catch (e) {}
+      return { latitude: loc.lat, longitude: loc.lng, timestamp: r.timestamp };
+    });
+
+    res.json(trail);
+  } catch (error) {
+    console.error('Error fetching driver history:', error);
+    res.status(500).json({ error: 'Failed to fetch driver history' });
   }
 });
 

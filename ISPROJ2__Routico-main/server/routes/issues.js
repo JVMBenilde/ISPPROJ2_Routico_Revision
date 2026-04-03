@@ -105,6 +105,34 @@ router.post('/', requirePerm('manage_issues'), async (req, res) => {
       [result.insertId]
     );
 
+    // Notify relevant parties about the new issue
+    if (req.app.locals.notifications) {
+      const issueId = result.insertId;
+      const shortDesc = description.length > 60 ? description.substring(0, 60) + '...' : description;
+
+      // If reporter is a driver, notify their business owner
+      const [driverInfo] = await db.query(
+        'SELECT owner_id FROM drivers WHERE user_id = ?', [userId]
+      );
+      if (driverInfo.length > 0) {
+        req.app.locals.notifications.createForBusinessOwner(
+          driverInfo[0].owner_id,
+          `New issue reported: ${shortDesc}`,
+          'issue_report', issueId, 'issue'
+        ).catch(err => console.error('Notification error:', err));
+      }
+
+      // Notify all administrators
+      const [admins] = await db.query("SELECT user_id FROM users WHERE role = 'administrator'");
+      for (const admin of admins) {
+        req.app.locals.notifications.create(
+          admin.user_id,
+          `New issue #${issueId} reported`,
+          'issue_report', issueId, 'issue'
+        ).catch(err => console.error('Notification error:', err));
+      }
+    }
+
     res.status(201).json(newIssue[0]);
   } catch (error) {
     console.error('Error creating issue:', error);

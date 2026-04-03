@@ -32,7 +32,7 @@ const AdministratorAuditLogs = () => {
       params.append('page', page);
       params.append('limit', limit);
 
-      const res = await fetch(`http://localhost:3001/api/audit-logs?${params}`, { headers });
+      const res = await fetch(`/api/audit-logs?${params}`, { headers });
       if (!res.ok) throw new Error('Failed to fetch audit logs');
       const data = await res.json();
       setLogs(data.logs);
@@ -48,8 +48,8 @@ const AdministratorAuditLogs = () => {
   const fetchFilters = async () => {
     try {
       const [usersRes, catsRes] = await Promise.all([
-        fetch('http://localhost:3001/api/audit-logs/users', { headers }),
-        fetch('http://localhost:3001/api/audit-logs/categories', { headers })
+        fetch('/api/audit-logs/users', { headers }),
+        fetch('/api/audit-logs/categories', { headers })
       ]);
       if (usersRes.ok) setUsers(await usersRes.json());
       if (catsRes.ok) setCategories(await catsRes.json());

@@ -55,7 +55,7 @@ const BusinessOwnerReports = () => {
       if (endDate) params.append('endDate', endDate);
 
       const response = await fetch(
-        `http://localhost:3001/api/reports/${reportType}?${params.toString()}`,
+        `/api/reports/${reportType}?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -89,7 +89,7 @@ const BusinessOwnerReports = () => {
       if (endDate) params.append('endDate', endDate);
 
       const response = await fetch(
-        `http://localhost:3001/api/reports/${selectedReport}/download/${format}?${params.toString()}`,
+        `/api/reports/${selectedReport}/download/${format}?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 

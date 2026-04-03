@@ -35,7 +35,7 @@ const AdministratorUserManagement = () => {
       const token = getToken();
 
       // Fetch pending users
-      const pendingResponse = await fetch('http://localhost:3001/api/auth/pending-users', {
+      const pendingResponse = await fetch('/api/auth/pending-users', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -45,7 +45,7 @@ const AdministratorUserManagement = () => {
       }
 
       // Fetch active users
-      const activeResponse = await fetch('http://localhost:3001/api/auth/users', {
+      const activeResponse = await fetch('/api/auth/users', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -84,7 +84,7 @@ const AdministratorUserManagement = () => {
   const fetchAllDrivers = async () => {
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/auth/all-drivers', {
+      const res = await fetch('/api/auth/all-drivers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -107,8 +107,8 @@ const AdministratorUserManagement = () => {
     try {
       const token = getToken();
       const url = resetPasswordTarget.type === 'driver'
-        ? `http://localhost:3001/api/auth/driver/${resetPasswordTarget.id}/reset-password`
-        : `http://localhost:3001/api/auth/user/${resetPasswordTarget.id}/reset-password`;
+        ? `/api/auth/driver/${resetPasswordTarget.id}/reset-password`
+        : `/api/auth/user/${resetPasswordTarget.id}/reset-password`;
       const res = await fetch(url, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -136,7 +136,7 @@ const AdministratorUserManagement = () => {
     }
     try {
       const token = getToken();
-      const res = await fetch(`http://localhost:3001/api/auth/driver/${driver.driver_id}/status`, {
+      const res = await fetch(`/api/auth/driver/${driver.driver_id}/status`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -156,7 +156,7 @@ const AdministratorUserManagement = () => {
   const handleApproveUser = async (userId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/user/${userId}/status`, {
+      const response = await fetch(`/api/auth/user/${userId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -189,7 +189,7 @@ const AdministratorUserManagement = () => {
 
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/user/${userId}/status`, {
+      const response = await fetch(`/api/auth/user/${userId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +217,7 @@ const AdministratorUserManagement = () => {
   const handleSuspendUser = async (userId, reason) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/user/${userId}/suspend`, {
+      const response = await fetch(`/api/auth/user/${userId}/suspend`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -251,7 +251,7 @@ const AdministratorUserManagement = () => {
 
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/user/${userId}/reactivate`, {
+      const response = await fetch(`/api/auth/user/${userId}/reactivate`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -275,7 +275,7 @@ const AdministratorUserManagement = () => {
   const handleViewDocument = async (userId, userName) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/document/${userId}`, {
+      const response = await fetch(`/api/auth/document/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -297,7 +297,7 @@ const AdministratorUserManagement = () => {
   const getPaymentStatus = async (userId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/user/${userId}/payment-status`, {
+      const response = await fetch(`/api/auth/user/${userId}/payment-status`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

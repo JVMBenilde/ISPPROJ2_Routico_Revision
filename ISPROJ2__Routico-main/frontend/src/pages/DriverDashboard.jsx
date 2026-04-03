@@ -5,12 +5,18 @@ import DriverIssues from '../components/DriverIssues';
 import DriverSettings from '../components/DriverSettings';
 import BusinessOwnerCharts from '../components/BusinessOwnerCharts';
 import Header from '../components/Header';
+import useLocationReporter from '../hooks/useLocationReporter';
 
 const DriverDashboard = () => {
   const { user, getToken, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState('orders');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [driverProfile, setDriverProfile] = useState(null);
+  const [locationEnabled, setLocationEnabled] = useState(() => {
+    const saved = localStorage.getItem('locationSharingEnabled');
+    return saved !== null ? saved === 'true' : true; // default enabled
+  });
+  const { isTracking, error: locationError } = useLocationReporter(locationEnabled, 30000);
 
   useEffect(() => {
     fetchDriverProfile();
@@ -19,7 +25,7 @@ const DriverDashboard = () => {
   const fetchDriverProfile = async () => {
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/auth/driver/me', {
+      const res = await fetch('/api/auth/driver/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -176,6 +182,30 @@ const DriverDashboard = () => {
             {accountItems.map(renderMenuItem)}
           </div>
         </nav>
+
+        {/* Location Tracking Indicator */}
+        {sidebarOpen && (
+          <div className="px-4 py-2 border-t border-white/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${isTracking ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`}></span>
+                <span className="text-xs text-gray-400">
+                  {isTracking ? 'Location sharing active' : locationError || 'Location off'}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  const next = !locationEnabled;
+                  setLocationEnabled(next);
+                  localStorage.setItem('locationSharingEnabled', String(next));
+                }}
+                className={`text-[10px] px-2 py-0.5 rounded-full ${locationEnabled ? 'bg-green-600/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}
+              >
+                {locationEnabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* User Info */}
         {sidebarOpen && (

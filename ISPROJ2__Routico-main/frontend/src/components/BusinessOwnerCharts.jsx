@@ -46,7 +46,7 @@ const BusinessOwnerCharts = ({ stats, loading: parentLoading, error: parentError
     setLoading(true);
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/orders/analytics/summary', {
+      const res = await fetch('/api/orders/analytics/summary', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -65,7 +65,7 @@ const BusinessOwnerCharts = ({ stats, loading: parentLoading, error: parentError
     setAiError(null);
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/ai-analytics/predict', {
+      const res = await fetch('/api/ai-analytics/predict', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

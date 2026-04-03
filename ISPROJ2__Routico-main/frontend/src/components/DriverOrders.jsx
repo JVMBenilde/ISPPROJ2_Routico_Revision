@@ -22,7 +22,7 @@ const DriverOrders = () => {
     setLoading(true);
     try {
       const token = getToken();
-      const res = await fetch('http://localhost:3001/api/drivers/me/orders', {
+      const res = await fetch('/api/drivers/me/orders', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -78,11 +78,8 @@ const DriverOrders = () => {
       const trafficLayer = new window.google.maps.TrafficLayer();
       trafficLayer.setMap(map);
 
-      new window.google.maps.Marker({ position: pickup, map, label: 'P', title: 'Pickup', icon: { url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png' } });
-      new window.google.maps.Marker({ position: dropoff, map, label: 'D', title: 'Dropoff', icon: { url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png' } });
-
       const ds = new window.google.maps.DirectionsService();
-      const dr = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: true });
+      const dr = new window.google.maps.DirectionsRenderer({ map });
       directionsRenderers.current[orderId] = { dr, map };
 
       ds.route({

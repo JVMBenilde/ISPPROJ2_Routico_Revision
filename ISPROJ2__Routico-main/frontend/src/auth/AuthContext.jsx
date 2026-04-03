@@ -58,7 +58,7 @@ export const AuthProvider = ({ children }) => {
         console.log('Company document attached:', userData.companyDocument.name);
       }
 
-      const response = await fetch('http://localhost:3001/api/auth/register', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         body: formData, // Send as FormData for file upload
       });
@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }) => {
 
       // Step 4: Fetch user data from database to set role and status
       try {
-        const userResponse = await fetch(`http://localhost:3001/api/auth/user/${encodeURIComponent(email)}`);
+        const userResponse = await fetch(`/api/auth/user/${encodeURIComponent(email)}`);
         if (userResponse.ok) {
           const userData = await userResponse.json();
           setUserRole(userData.role);
@@ -115,7 +115,7 @@ export const AuthProvider = ({ children }) => {
   const signIn = async (email, password) => {
     try {
       // Try JWT login first (works for all roles)
-      const jwtResponse = await fetch('http://localhost:3001/api/auth/login', {
+      const jwtResponse = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -207,7 +207,7 @@ export const AuthProvider = ({ children }) => {
 
         // Fetch user role from database using email
         try {
-          const response = await fetch(`http://localhost:3001/api/auth/user/${encodeURIComponent(firebaseUser.email)}`);
+          const response = await fetch(`/api/auth/user/${encodeURIComponent(firebaseUser.email)}`);
 
           if (response.ok) {
             const userData = await response.json();

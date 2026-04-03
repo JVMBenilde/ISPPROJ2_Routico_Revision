@@ -45,7 +45,7 @@ const AdministratorBillingCharts = () => {
     setError(null);
     try {
       const token = getToken();
-      const pendingResponse = await fetch('http://localhost:3001/api/auth/admin/billing-statements/pending', {
+      const pendingResponse = await fetch('/api/auth/admin/billing-statements/pending', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -56,7 +56,7 @@ const AdministratorBillingCharts = () => {
       }
 
       try {
-        const revenueResponse = await fetch('http://localhost:3001/api/auth/admin/billing-stats', {
+        const revenueResponse = await fetch('/api/auth/admin/billing-stats', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -86,7 +86,7 @@ const AdministratorBillingCharts = () => {
   const handleApprovePayment = async (statementId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/admin/billing-statements/${statementId}/approve`, {
+      const response = await fetch(`/api/auth/admin/billing-statements/${statementId}/approve`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
@@ -107,7 +107,7 @@ const AdministratorBillingCharts = () => {
   const handleRejectPayment = async (statementId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/admin/billing-statements/${statementId}/reject`, {
+      const response = await fetch(`/api/auth/admin/billing-statements/${statementId}/reject`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
@@ -128,7 +128,7 @@ const AdministratorBillingCharts = () => {
   const handleDownloadPaymentProof = async (statementId, ownerName) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/admin/billing-statements/${statementId}/payment-proof`, {
+      const response = await fetch(`/api/auth/admin/billing-statements/${statementId}/payment-proof`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {

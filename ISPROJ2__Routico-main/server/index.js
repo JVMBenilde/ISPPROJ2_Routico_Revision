@@ -17,6 +17,9 @@ const { runNameFieldsMigration } = require('./migrations/004_separate_name_field
 const { runMechanicsMigration } = require('./migrations/005_mechanics');
 const { runPartnerShopsMigration } = require('./migrations/006_partner_shops');
 const { runIssueCategoriesMigration } = require('./migrations/007_issue_categories');
+const { runNotificationsTrackingMigration } = require('./migrations/008_notifications_tracking');
+const NotificationService = require('./services/notificationService');
+const SMSService = require('./services/smsService');
 const AuditLogService = require('./services/auditLogService');
 const path = require('path');
 
@@ -106,6 +109,8 @@ app.use('/api/roles', rolesRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/vehicles', vehiclesRoutes);
 app.use('/api/reports', reportsRoutes);
+const notificationsRoutes = require('./routes/notifications');
+app.use('/api/notifications', notificationsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -172,8 +177,21 @@ async function startServer() {
       console.error('Issue categories migration error:', migrationError);
     }
 
+    // Run notifications/tracking migration
+    try {
+      await runNotificationsTrackingMigration(db);
+    } catch (migrationError) {
+      console.error('Notifications/tracking migration error:', migrationError);
+    }
+
     // Initialize audit log service
     app.locals.auditLog = new AuditLogService(db);
+
+    // Initialize notification service
+    app.locals.notifications = new NotificationService(db);
+
+    // Initialize SMS service
+    app.locals.sms = new SMSService();
 
     // Initialize permission cache
     try {

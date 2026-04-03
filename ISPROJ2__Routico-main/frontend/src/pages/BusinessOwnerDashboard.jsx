@@ -8,6 +8,7 @@ import BusinessOwnerIssues from '../components/BusinessOwnerIssues';
 import BusinessOwnerSettings from '../components/BusinessOwnerSettings';
 import BusinessOwnerFleet from '../components/BusinessOwnerFleet';
 import BusinessOwnerReports from '../components/BusinessOwnerReports';
+import LiveTrackingMap from '../components/LiveTrackingMap';
 
 const BusinessOwnerDashboard = () => {
   const { user, getToken, logout } = useAuth();
@@ -94,7 +95,7 @@ const BusinessOwnerDashboard = () => {
     setLoading(true);
     setError(null);
     try {
-      const statsResponse = await fetch('http://localhost:3001/api/auth/business-dashboard-stats-test');
+      const statsResponse = await fetch('/api/auth/business-dashboard-stats-test');
       let statsData = {
         totalOrders: 0,
         activeDrivers: 0,
@@ -110,7 +111,7 @@ const BusinessOwnerDashboard = () => {
       if (user) {
         try {
           const token = getToken();
-          const driversResponse = await fetch('http://localhost:3001/api/drivers', {
+          const driversResponse = await fetch('/api/drivers', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (driversResponse.ok) {
@@ -127,7 +128,7 @@ const BusinessOwnerDashboard = () => {
 
       if (user) {
         const token = getToken();
-        const ordersResponse = await fetch('http://localhost:3001/api/orders?includeRouted=true', {
+        const ordersResponse = await fetch('/api/orders?includeRouted=true', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -169,7 +170,7 @@ const BusinessOwnerDashboard = () => {
 
         // Fetch recent activity
         try {
-          const activityResponse = await fetch('http://localhost:3001/api/auth/my-activity', {
+          const activityResponse = await fetch('/api/auth/my-activity', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (activityResponse.ok) {
@@ -203,7 +204,8 @@ const BusinessOwnerDashboard = () => {
     { id: 'overview', label: 'Dashboard', icon: 'dashboard' },
     { id: 'orders', label: 'Delivery Orders', icon: 'orders' },
     { id: 'routes', label: 'Route Optimization', icon: 'route' },
-    { id: 'charts', label: 'Tracking', icon: 'tracking' },
+    { id: 'charts', label: 'Analytics', icon: 'tracking' },
+    { id: 'live-tracking', label: 'Live Tracking', icon: 'location' },
     { id: 'drivers', label: 'Drivers', icon: 'drivers' },
     { id: 'fleet', label: 'Trucks', icon: 'trucks' },
   ];
@@ -220,7 +222,8 @@ const BusinessOwnerDashboard = () => {
     { id: 'orders', label: 'Delivery Orders', icon: 'orders' },
     { id: 'routes', label: 'Route Optimization', icon: 'route' },
     { id: 'fleet', label: 'Trucks', icon: 'trucks' },
-    { id: 'charts', label: 'Tracking', icon: 'tracking' },
+    { id: 'charts', label: 'Analytics', icon: 'tracking' },
+    { id: 'live-tracking', label: 'Live Tracking', icon: 'location' },
     { id: 'drivers', label: 'Drivers', icon: 'drivers' },
     { id: 'issues', label: 'Issues', icon: 'issues' },
     { id: 'reports', label: 'Reports', icon: 'reports' },
@@ -252,6 +255,13 @@ const BusinessOwnerDashboard = () => {
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        );
+      case 'location':
+        return (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         );
       case 'drivers':
@@ -974,6 +984,7 @@ const BusinessOwnerDashboard = () => {
           {activeTab === 'charts' && (
             <BusinessOwnerCharts stats={stats} loading={loading} error={error} />
           )}
+          {activeTab === 'live-tracking' && <LiveTrackingMap />}
           {activeTab === 'orders' && <BusinessOwnerOrders />}
           {activeTab === 'routes' && <BusinessOwnerOrders routeOptimizationOnly />}
           {activeTab === 'drivers' && <BusinessOwnerDrivers />}

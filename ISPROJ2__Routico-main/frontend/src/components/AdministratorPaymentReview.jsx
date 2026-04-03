@@ -33,13 +33,13 @@ const AdministratorPaymentReview = () => {
       const token = getToken();
       
       const [ownersRes, pendingRes, overdueRes] = await Promise.all([
-        fetch('http://localhost:3001/api/auth/admin/business-owners/billing', {
+        fetch('/api/auth/admin/business-owners/billing', {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://localhost:3001/api/auth/admin/billing-statements/pending', {
+        fetch('/api/auth/admin/billing-statements/pending', {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://localhost:3001/api/auth/admin/billing-statements/overdue-accounts', {
+        fetch('/api/auth/admin/billing-statements/overdue-accounts', {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
@@ -82,7 +82,7 @@ const AdministratorPaymentReview = () => {
   const fetchOwnerStatements = async (ownerId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/admin/business-owners/${ownerId}/statements`, {
+      const response = await fetch(`/api/auth/admin/business-owners/${ownerId}/statements`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -105,7 +105,7 @@ const AdministratorPaymentReview = () => {
 
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/admin/billing-statements/${statementId}/approve`, {
+      const response = await fetch(`/api/auth/admin/billing-statements/${statementId}/approve`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -138,7 +138,7 @@ const AdministratorPaymentReview = () => {
 
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/admin/billing-statements/${statementId}/reject`, {
+      const response = await fetch(`/api/auth/admin/billing-statements/${statementId}/reject`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -169,7 +169,7 @@ const AdministratorPaymentReview = () => {
   const handleViewPaymentProof = async (statementId) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/auth/admin/billing-statements/${statementId}/payment-proof`, {
+      const response = await fetch(`/api/auth/admin/billing-statements/${statementId}/payment-proof`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -200,7 +200,7 @@ const AdministratorPaymentReview = () => {
 
     try {
       const token = getToken();
-      const response = await fetch('http://localhost:3001/api/auth/admin/billing-statements/bulk-suspend', {
+      const response = await fetch('/api/auth/admin/billing-statements/bulk-suspend', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

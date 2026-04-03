@@ -24,7 +24,7 @@ const RestrictedBillingAccess = () => {
       const token = getToken();
 
       // Fetch current subscription
-      const subscriptionResponse = await fetch('http://localhost:3001/api/auth/subscription/current', {
+      const subscriptionResponse = await fetch('/api/auth/subscription/current', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -34,7 +34,7 @@ const RestrictedBillingAccess = () => {
       }
 
       // Fetch billing history
-      const billingResponse = await fetch('http://localhost:3001/api/auth/billing', {
+      const billingResponse = await fetch('/api/auth/billing', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -44,7 +44,7 @@ const RestrictedBillingAccess = () => {
       }
 
       // Fetch next payment due date
-      const nextPaymentResponse = await fetch('http://localhost:3001/api/auth/subscription/next-payment-due', {
+      const nextPaymentResponse = await fetch('/api/auth/subscription/next-payment-due', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -97,7 +97,7 @@ const RestrictedBillingAccess = () => {
       formData.append('paymentProof', selectedFile);
       formData.append('amount', '2000'); // Monthly subscription fee
 
-      const response = await fetch('http://localhost:3001/api/auth/subscription/payment-proof', {
+      const response = await fetch('/api/auth/subscription/payment-proof', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

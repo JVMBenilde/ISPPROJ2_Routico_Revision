@@ -189,8 +189,8 @@ const AdministratorRoleManagement = () => {
       </div>
 
       {/* Roles Table */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-        <table className="w-full">
+      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[600px]">
           <colgroup>
             <col style={{ width: '15%' }} />
             <col style={{ width: '35%' }} />

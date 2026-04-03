@@ -95,7 +95,7 @@ const Header = () => {
           </div>
 
           {/* Center: Search Bar */}
-          <div className="flex-1 max-w-md mx-8">
+          <div className="hidden sm:block flex-1 max-w-md mx-2 sm:mx-4 md:mx-8">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

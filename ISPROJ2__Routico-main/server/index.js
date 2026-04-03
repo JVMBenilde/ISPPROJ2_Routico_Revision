@@ -16,6 +16,7 @@ const { runFleetMigration } = require('./migrations/003_fleet_management');
 const { runNameFieldsMigration } = require('./migrations/004_separate_name_fields');
 const { runMechanicsMigration } = require('./migrations/005_mechanics');
 const { runPartnerShopsMigration } = require('./migrations/006_partner_shops');
+const { runIssueCategoriesMigration } = require('./migrations/007_issue_categories');
 const { runNotificationDeviceTokensMigration } = require('./migrations/007_notification_device_tokens');
 const AuditLogService = require('./services/auditLogService');
 const path = require('path');
@@ -165,6 +166,13 @@ async function startServer() {
       await runPartnerShopsMigration(db);
     } catch (migrationError) {
       console.error('Partner shops migration error:', migrationError);
+    }
+
+    // Seed issue categories
+    try {
+      await runIssueCategoriesMigration(db);
+    } catch (migrationError) {
+      console.error('Issue categories migration error:', migrationError);
     }
 
     // Run notification device tokens migration

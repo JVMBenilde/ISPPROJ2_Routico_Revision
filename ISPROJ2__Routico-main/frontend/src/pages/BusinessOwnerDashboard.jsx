@@ -35,6 +35,17 @@ const BusinessOwnerDashboard = () => {
   const [drivers, setDrivers] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [error, setError] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.classList.add('overflow-hidden', 'md:overflow-auto');
+    } else {
+      document.body.classList.remove('overflow-hidden', 'md:overflow-auto');
+    }
+    return () => document.body.classList.remove('overflow-hidden', 'md:overflow-auto');
+  }, [sidebarOpen]);
 
   // Apply dark/light mode to document
   useEffect(() => {
@@ -307,8 +318,13 @@ const BusinessOwnerDashboard = () => {
 
   return (
     <div className="flex min-h-screen overflow-hidden bg-[#111621]">
+      {/* Mobile Backdrop */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 border-r border-slate-800 bg-slate-900 flex flex-col shrink-0">
+      <aside className={`fixed inset-y-0 left-0 z-[70] w-64 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:static md:z-auto md:translate-x-0 border-r border-slate-800 bg-slate-900 flex flex-col shrink-0`}>
         {/* Logo */}
         <div className="p-6 flex flex-col gap-1">
           <div className="flex items-center gap-2 text-[#2463eb]">
@@ -331,7 +347,7 @@ const BusinessOwnerDashboard = () => {
             return (
               <button
                 key={item.id + item.icon}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => { setActiveTab(item.id); if (window.innerWidth < 768) setSidebarOpen(false); }}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
                   isActive
                     ? 'bg-[#2463eb] text-white'
@@ -353,7 +369,7 @@ const BusinessOwnerDashboard = () => {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => { setActiveTab(item.id); if (window.innerWidth < 768) setSidebarOpen(false); }}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
                   isActive
                     ? 'bg-[#2463eb] text-white'
@@ -393,15 +409,24 @@ const BusinessOwnerDashboard = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-y-auto">
+      <main className="flex-1 flex flex-col h-screen overflow-y-auto min-w-0 overflow-x-hidden">
         {/* Sticky Header */}
-        <header className="sticky top-0 z-10 flex items-center justify-between px-8 py-4 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-white">
+        <header className="sticky top-0 z-10 flex items-center justify-between px-4 md:px-8 py-4 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
+          <div className="flex items-center gap-3 md:gap-4">
+            {/* Mobile hamburger */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="md:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <h2 className="text-lg md:text-xl font-bold text-white truncate">
               {allMenuItems.find(item => item.id === activeTab)?.label || 'Dashboard'}
             </h2>
             {/* Search */}
-            <div className="relative w-72">
+            <div className="relative hidden sm:block w-40 md:w-72">
               <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -469,7 +494,7 @@ const BusinessOwnerDashboard = () => {
         </header>
 
         {/* Content */}
-        <div className="p-8 space-y-8">
+        <div className="p-4 md:p-8 space-y-6 md:space-y-8">
           {/* Tab Content */}
           {activeTab === 'overview' && (
             <>

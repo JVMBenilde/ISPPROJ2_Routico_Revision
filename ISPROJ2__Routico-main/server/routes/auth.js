@@ -1303,23 +1303,13 @@ router.get('/admin/billing-stats', requirePerm('view_admin_billing_stats'), asyn
     );
     console.log('Subscriptions result:', subscriptionsResult[0]);
     
-    // Get overdue accounts (business owners who are actually overdue on payments)
-    // This counts users who are inactive AND have a payment due date that has passed
+    // Get overdue accounts from billing table
+    // Count billing records that are past due (due date = billing_period + 1 month)
     const overdueResult = await db.query(
-      `SELECT COUNT(*) as overdueAccounts 
-       FROM (
-         SELECT u.user_id, u.created_at,
-                DATE_ADD(DATE(u.created_at), INTERVAL 
-                  (YEAR(CURDATE()) - YEAR(u.created_at)) * 12 + 
-                  (MONTH(CURDATE()) - MONTH(u.created_at)) + 1 
-                MONTH) as payment_due_date
-         FROM users u 
-         JOIN businessowners bo ON u.user_id = bo.user_id 
-         WHERE u.role = 'business_owner' 
-           AND u.account_status = 'approved' 
-           AND u.active_status = 'inactive'
-       ) overdue_check
-       WHERE payment_due_date < CURDATE()`
+      `SELECT COUNT(DISTINCT b.owner_id) as overdueAccounts
+       FROM billing b
+       WHERE b.status IN ('overdue', 'suspended')
+       OR (b.status = 'pending' AND DATE_ADD(b.billing_period, INTERVAL 1 MONTH) < CURDATE())`
     );
     console.log('Overdue result:', overdueResult[0]);
     
@@ -1732,8 +1722,8 @@ router.get('/admin/billing-statements/overdue-accounts', requirePerm('view_admin
       FROM billing b
       JOIN businessowners bo ON b.owner_id = bo.owner_id
       JOIN users u ON bo.user_id = u.user_id
-      WHERE (b.status IN ('overdue', 'suspended', 'pending') 
-        AND DATE_ADD(b.billing_period, INTERVAL 1 MONTH) < NOW())
+      WHERE b.status IN ('overdue', 'suspended')
+        OR (b.status = 'pending' AND DATE_ADD(b.billing_period, INTERVAL 1 MONTH) < CURDATE())
       ORDER BY days_overdue DESC, b.total_due DESC`
     );
     

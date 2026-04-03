@@ -20,6 +20,10 @@ const AdministratorPaymentReview = () => {
 
   useEffect(() => {
     fetchData();
+
+    const handleBillingUpdate = () => fetchData();
+    window.addEventListener('billingUpdated', handleBillingUpdate);
+    return () => window.removeEventListener('billingUpdated', handleBillingUpdate);
   }, []);
 
   const fetchData = async () => {
@@ -115,6 +119,7 @@ const AdministratorPaymentReview = () => {
         if (selectedOwner) {
           await fetchOwnerStatements(selectedOwner.owner_id);
         }
+        window.dispatchEvent(new Event('billingUpdated'));
         setTimeout(() => setSuccessMessage(null), 3000);
       } else {
         const errorData = await response.json();
@@ -147,6 +152,7 @@ const AdministratorPaymentReview = () => {
         if (selectedOwner) {
           await fetchOwnerStatements(selectedOwner.owner_id);
         }
+        window.dispatchEvent(new Event('billingUpdated'));
         setTimeout(() => setSuccessMessage(null), 3000);
       } else {
         const errorData = await response.json();
@@ -301,7 +307,7 @@ const AdministratorPaymentReview = () => {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
         <div className="bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-700">
           <div className="p-5">
             <div className="flex items-center">
@@ -395,10 +401,10 @@ const AdministratorPaymentReview = () => {
 
       {/* Tabs */}
       <div className="border-b border-gray-700">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto">
           <button
             onClick={() => setActiveTab('all-accounts')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
               activeTab === 'all-accounts'
                 ? 'border-blue-400 text-blue-400'
                 : 'border-transparent text-gray-400 hover:text-white hover:border-gray-600'
@@ -408,7 +414,7 @@ const AdministratorPaymentReview = () => {
           </button>
           <button
             onClick={() => setActiveTab('pending')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
               activeTab === 'pending'
                 ? 'border-blue-400 text-blue-400'
                 : 'border-transparent text-gray-400 hover:text-white hover:border-gray-600'
@@ -418,7 +424,7 @@ const AdministratorPaymentReview = () => {
           </button>
           <button
             onClick={() => setActiveTab('overdue')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
               activeTab === 'overdue'
                 ? 'border-blue-400 text-blue-400'
                 : 'border-transparent text-gray-400 hover:text-white hover:border-gray-600'
@@ -514,15 +520,15 @@ const AdministratorPaymentReview = () => {
             </div>
           ) : (
             pendingStatements.map((statement) => (
-              <div key={statement.statement_id} className={`bg-gray-800 shadow rounded-lg p-6 ${statement.has_payment_proof ? 'border-2 border-blue-600' : 'border border-gray-700'}`}>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
+              <div key={statement.statement_id} className={`bg-gray-800 shadow rounded-lg p-4 sm:p-6 ${statement.has_payment_proof ? 'border-2 border-blue-600' : 'border border-gray-700'}`}>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <div>
                         <h3 className="text-lg font-medium text-white">{statement.company_name || statement.full_name}</h3>
                         <p className="text-sm text-gray-400">{statement.full_name}</p>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {statement.has_payment_proof ? (
                           <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                             <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -563,7 +569,7 @@ const AdministratorPaymentReview = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="ml-6 flex flex-col space-y-2">
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-700">
                     {statement.has_payment_proof && (
                       <button
                         onClick={() => handleViewPaymentProof(statement.statement_id)}
@@ -637,21 +643,21 @@ const AdministratorPaymentReview = () => {
             </div>
           ) : (
             overdueAccounts.map((account) => (
-              <div key={account.statement_id} className="bg-gray-800 shadow rounded-lg border border-red-700 p-6">
+              <div key={account.statement_id} className="bg-gray-800 shadow rounded-lg border border-red-700 p-4 sm:p-6">
                 <div className="flex items-start">
                   <input
                     type="checkbox"
                     checked={selectedStatements.includes(account.statement_id)}
                     onChange={() => toggleStatementSelection(account.statement_id)}
-                    className="mt-1 h-4 w-4 text-blue-600 border-gray-600 rounded focus:ring-blue-500"
+                    className="mt-1 h-4 w-4 text-blue-600 border-gray-600 rounded focus:ring-blue-500 flex-shrink-0"
                   />
-                  <div className="ml-4 flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-lg font-medium text-white">{account.company_name}</h3>
-                        <p className="text-sm text-gray-400">{account.full_name} • {account.email}</p>
+                  <div className="ml-3 sm:ml-4 flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-medium text-white truncate">{account.company_name}</h3>
+                        <p className="text-sm text-gray-400 truncate">{account.full_name} • {account.email}</p>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {account.payment_proof_path ? (
                           <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                             Proof Uploaded

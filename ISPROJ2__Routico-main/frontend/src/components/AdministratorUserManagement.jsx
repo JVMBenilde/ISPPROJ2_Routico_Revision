@@ -327,8 +327,8 @@ const AdministratorUserManagement = () => {
             }
           }}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 flex-1 min-w-0">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center space-x-3 min-w-0">
               <div className="flex-shrink-0">
                 <div className="h-8 w-8 bg-gray-700 rounded-full flex items-center justify-center">
                   <span className="text-sm font-medium text-white">
@@ -336,8 +336,8 @@ const AdministratorUserManagement = () => {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-4 flex-1 min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-sm font-medium text-white truncate">
                     {user.full_name}
                   </h3>
@@ -352,9 +352,11 @@ const AdministratorUserManagement = () => {
                     </svg>
                   )}
                 </div>
-                <span className="text-xs text-gray-400 truncate hidden sm:inline">{user.email}</span>
-                <span className="text-xs text-gray-500 hidden md:inline">{user.phone}</span>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  <span className="text-xs text-gray-400 truncate">{user.email}</span>
+                  <span className="text-xs text-gray-500 hidden md:inline">{user.phone}</span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                     user.account_status === 'approved' ? 'bg-green-900 text-green-200' :
                     user.account_status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
@@ -367,15 +369,15 @@ const AdministratorUserManagement = () => {
                   }`}>
                     {user.active_status}
                   </span>
+                  <span className="text-xs text-gray-500 hidden lg:inline flex-shrink-0">
+                    {new Date(user.created_at).toLocaleDateString()}
+                  </span>
                 </div>
-                <span className="text-xs text-gray-500 hidden lg:inline flex-shrink-0">
-                  {new Date(user.created_at).toLocaleDateString()}
-                </span>
               </div>
             </div>
 
             {/* Payment Status & Actions */}
-            <div className="flex items-center gap-2 ml-4 flex-shrink-0" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap" onClick={e => e.stopPropagation()}>
               {isPending ? (
                 <>
                   <button
@@ -576,27 +578,27 @@ const AdministratorUserManagement = () => {
       <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg">
         <button
           onClick={() => setActiveView('pending')}
-          className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+          className={`flex-1 py-2 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors ${
             activeView === 'pending'
               ? 'bg-blue-600 text-white'
               : 'text-gray-400 hover:text-white'
           }`}
         >
-          Pending Approvals ({pendingUsers.length})
+          Pending ({pendingUsers.length})
         </button>
         <button
           onClick={() => setActiveView('active')}
-          className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+          className={`flex-1 py-2 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors ${
             activeView === 'active'
               ? 'bg-green-600 text-white'
               : 'text-gray-400 hover:text-white'
           }`}
         >
-          Active Accounts ({activeUsers.length})
+          Active ({activeUsers.length})
         </button>
         <button
           onClick={() => setActiveView('suspended')}
-          className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+          className={`flex-1 py-2 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors ${
             activeView === 'suspended'
               ? 'bg-red-600 text-white'
               : 'text-gray-400 hover:text-white'
@@ -675,7 +677,7 @@ const AdministratorUserManagement = () => {
       {/* Suspension Modal */}
       {showSuspendModal && selectedUser && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-gray-800">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-sm sm:w-96 shadow-lg rounded-md bg-gray-800">
             <div className="mt-3">
               <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
                 <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -735,7 +737,7 @@ const AdministratorUserManagement = () => {
       {/* Reset Password Modal */}
       {showResetPasswordModal && resetPasswordTarget && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-gray-800">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-sm sm:w-96 shadow-lg rounded-md bg-gray-800">
             <div className="mt-3">
               <div className="flex items-center justify-center w-12 h-12 mx-auto bg-blue-900/50 rounded-full">
                 <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

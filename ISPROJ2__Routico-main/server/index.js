@@ -16,6 +16,7 @@ const { runFleetMigration } = require('./migrations/003_fleet_management');
 const { runNameFieldsMigration } = require('./migrations/004_separate_name_fields');
 const { runMechanicsMigration } = require('./migrations/005_mechanics');
 const { runPartnerShopsMigration } = require('./migrations/006_partner_shops');
+const { runNotificationDeviceTokensMigration } = require('./migrations/007_notification_device_tokens');
 const AuditLogService = require('./services/auditLogService');
 const path = require('path');
 
@@ -93,6 +94,7 @@ const rolesRoutes = require('./routes/roles');
 const auditLogRoutes = require('./routes/auditLogs');
 const vehiclesRoutes = require('./routes/vehicles');
 const reportsRoutes = require('./routes/reports');
+const notificationsRoutes = require('./routes/notifications');
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/billing', billingRoutes);
@@ -105,6 +107,7 @@ app.use('/api/roles', rolesRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/vehicles', vehiclesRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -162,6 +165,13 @@ async function startServer() {
       await runPartnerShopsMigration(db);
     } catch (migrationError) {
       console.error('Partner shops migration error:', migrationError);
+    }
+
+    // Run notification device tokens migration
+    try {
+      await runNotificationDeviceTokensMigration(db);
+    } catch (migrationError) {
+      console.error('Notification device tokens migration error:', migrationError);
     }
 
     // Initialize audit log service

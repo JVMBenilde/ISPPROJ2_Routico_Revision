@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requirePerm } = require('../middleware/auth');
+const NotificationService = require('../services/notificationService');
 
 // Get all orders for the authenticated business owner
 router.get('/', requirePerm('view_orders'), async (req, res) => {
@@ -193,6 +194,7 @@ router.post('/', requirePerm('create_orders'), async (req, res) => {
 router.put('/:orderId/status', requirePerm('update_order_status'), async (req, res) => {
   try {
     const db = req.app.locals.db;
+    const notificationService = new NotificationService(db);
     const userId = req.user.user_id;
     const orderId = req.params.orderId;
     const { status } = req.body;
@@ -269,6 +271,17 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
       );
     }
 
+    try {
+      await notificationService.notifyOrderStatusUpdate({
+        orderId: Number(orderId),
+        oldStatus: currentStatus,
+        newStatus: status,
+        actorRole: req.userRole || 'business_owner'
+      });
+    } catch (notificationError) {
+      console.error('Order status notification error:', notificationError);
+    }
+
     // Fetch updated order with joins
     const [updatedOrders] = await db.query(
       `SELECT o.*, c.company_name as customer_name, c.contact_number as customer_phone,
@@ -291,6 +304,7 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
 router.put('/:orderId/assign', requirePerm('assign_orders'), async (req, res) => {
   try {
     const db = req.app.locals.db;
+    const notificationService = new NotificationService(db);
     const userId = req.user.user_id;
     const orderId = req.params.orderId;
     const { driverId } = req.body;
@@ -338,6 +352,31 @@ router.put('/:orderId/assign', requirePerm('assign_orders'), async (req, res) =>
         `INSERT INTO deliverystatuslogs (order_id, status) VALUES (?, ?)`,
         [orderId, newStatus]
       );
+    }
+
+    if (driverId) {
+      try {
+        await notificationService.notifyOrderAssignment({
+          orderId: Number(orderId),
+          ownerId,
+          driverId: Number(driverId)
+        });
+      } catch (notificationError) {
+        console.error('Order assignment notification error:', notificationError);
+      }
+    }
+
+    if (newStatus !== orderRows[0].order_status) {
+      try {
+        await notificationService.notifyOrderStatusUpdate({
+          orderId: Number(orderId),
+          oldStatus: orderRows[0].order_status,
+          newStatus,
+          actorRole: req.userRole || 'business_owner'
+        });
+      } catch (notificationError) {
+        console.error('Order status notification error:', notificationError);
+      }
     }
 
     // Fetch updated order

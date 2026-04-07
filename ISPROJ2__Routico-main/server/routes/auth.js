@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { requireBusinessOwnerOrInactive, requireDriver, requirePerm } = require('../middleware/auth');
 const RegistrationService = require('../services/registrationService');
 const SubscriptionService = require('../services/subscriptionService');
@@ -35,7 +36,7 @@ const upload = multer({
 router.post('/register', upload.single('companyDocument'), async (req, res) => {
   const db = req.app.locals.db;
   const registrationService = new RegistrationService(db);
-  
+
   try {
     const { firstName, lastName, middleName, email, phone, password } = req.body;
 
@@ -52,7 +53,7 @@ router.post('/register', upload.single('companyDocument'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Registration error:', error.message);
     
     // Handle specific error types
     if (error.message.includes('already exists')) {

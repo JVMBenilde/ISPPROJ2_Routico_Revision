@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import notificationService from '../services/notificationService';
 
 const Header = () => {
   const { user, userRole, logout } = useAuth();
+  const navigate = useNavigate();
   const [logo, setLogo] = useState(null);
   const [companyName, setCompanyName] = useState('Routico');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [notifications, setNotifications] = useState(() => notificationService.loadFromStorage());
 
   useEffect(() => {
     const savedLogo = localStorage.getItem('companyLogo');
@@ -24,6 +29,82 @@ const Header = () => {
     return () => window.removeEventListener('logoUpdated', handleLogoUpdate);
   }, []);
 
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('[data-header-dropdown]')) {
+        setShowNotifications(false);
+        setShowSettings(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Initialize notifications and request FCM permission
+  useEffect(() => {
+    if (!user) return;
+
+    let unsubscribe = () => {};
+
+    const initializeNotifications = async () => {
+      try {
+        console.log('📱 Initializing notifications...');
+
+        // Request permission and register for push notifications
+        const token = await notificationService.requestPermission();
+        if (token) {
+          console.log('✅ Push notifications enabled');
+        } else {
+          console.log('⚠️ Notifications not enabled');
+        }
+
+        // Listen for foreground messages
+        unsubscribe = notificationService.onNotification((payload) => {
+          console.log('📬 New notification:', payload);
+          const notification = {
+            title: payload.notification?.title || 'Routico Notification',
+            message: payload.notification?.body || 'You have a new message',
+            time: new Date().toLocaleTimeString(),
+            type: payload.data?.type || 'info',
+            data: payload.data
+          };
+          notificationService.saveToStorage(notification);
+          setNotifications(notificationService.loadFromStorage());
+        });
+
+        // Listen for messages relayed from the service worker (background FCM)
+        const swMessageHandler = (event) => {
+          console.log('📨 SW message received:', event.data);
+          if (event.data?.type === 'FCM_BACKGROUND_MESSAGE') {
+            const payload = event.data.payload;
+            const notification = {
+              title: payload.notification?.title || 'Routico Notification',
+              message: payload.notification?.body || 'You have a new message',
+              time: new Date().toLocaleTimeString(),
+              type: payload.data?.type || 'info',
+              data: payload.data
+            };
+            notificationService.saveToStorage(notification);
+            setNotifications(notificationService.loadFromStorage());
+          }
+        };
+        navigator.serviceWorker?.addEventListener('message', swMessageHandler);
+        const removeSWListener = () => navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
+        const origUnsub = unsubscribe;
+        unsubscribe = () => { origUnsub(); removeSWListener(); };
+      } catch (error) {
+        console.error('📱 Error initializing notifications:', error);
+      }
+    };
+
+    initializeNotifications();
+
+    return () => unsubscribe();
+  }, [user]);
+
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -31,6 +112,7 @@ const Header = () => {
       console.error('Failed to logout:', error);
     }
   };
+
 
   const getRoleLabel = () => {
     switch (userRole) {
@@ -113,21 +195,94 @@ const Header = () => {
           </div>
 
           {/* Right: Notifications + User */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4 relative">
             {/* Notification Bell */}
-            <button className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800/50 transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </button>
+            <div className="relative" data-header-dropdown>
+              <button
+                onClick={() => {
+                  const opening = !showNotifications;
+                  setShowNotifications(opening);
+                  if (opening) {
+                    const updated = notificationService.markAllAsRead();
+                    setNotifications(updated);
+                  }
+                }}
+                className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800/50 transition-colors"
+                title="Notifications"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {notifications.some(n => !n.read) && (
+                  <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full"></span>
+                )}
+              </button>
+
+              {/* Notifications Dropdown */}
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-[#1a2235] border border-gray-700/50 rounded-lg shadow-xl z-50">
+                  <div className="p-4 border-b border-gray-700/50">
+                    <h3 className="text-white font-semibold">Notifications</h3>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500 text-sm">
+                        <p>No notifications yet</p>
+                      </div>
+                    ) : (
+                      notifications.map((notif, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            setShowNotifications(false);
+                            if (notif.data?.action) navigate(notif.data.action);
+                          }}
+                          className={`p-4 border-b border-gray-700/50 hover:bg-gray-800/30 cursor-pointer transition-colors ${!notif.read ? 'border-l-2 border-l-blue-500' : ''}`}
+                        >
+                          {notif.title && <p className="text-sm font-semibold text-white">{notif.title}</p>}
+                          <p className="text-sm text-gray-300">{notif.message}</p>
+                          <p className="text-xs text-gray-500 mt-1">{notif.time}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Settings Gear */}
-            <button className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800/50 transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
+            <div className="relative" data-header-dropdown>
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800/50 transition-colors"
+                title="Settings"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+
+              {/* Settings Dropdown */}
+              {showSettings && (
+                <div className="absolute right-0 mt-2 w-48 bg-[#1a2235] border border-gray-700/50 rounded-lg shadow-xl z-50">
+                  <div className="p-4 border-b border-gray-700/50">
+                    <h3 className="text-white font-semibold">Settings</h3>
+                  </div>
+                  <div>
+                    <button className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800/30 transition-colors border-b border-gray-700/50">
+                      Profile Settings
+                    </button>
+                    <button className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800/30 transition-colors border-b border-gray-700/50">
+                      Preferences
+                    </button>
+                    <button className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800/30 transition-colors">
+                      Help & Support
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Divider */}
             <div className="h-8 w-px bg-gray-700/50"></div>

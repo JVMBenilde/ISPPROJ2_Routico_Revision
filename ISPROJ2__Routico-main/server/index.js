@@ -17,6 +17,7 @@ const { runNameFieldsMigration } = require('./migrations/004_separate_name_field
 const { runMechanicsMigration } = require('./migrations/005_mechanics');
 const { runPartnerShopsMigration } = require('./migrations/006_partner_shops');
 const { runIssueCategoriesMigration } = require('./migrations/007_issue_categories');
+const { runFCMTokensMigration } = require('./migrations/008_fcm_tokens');
 const AuditLogService = require('./services/auditLogService');
 const path = require('path');
 
@@ -68,12 +69,18 @@ app.get('/', (req, res) => {
   res.json({ message: 'Server is running!' });
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+app.get('/api/health', async (req, res) => {
+  let fcmTokenCount = 0;
+  try {
+    const [rows] = await db.query('SELECT COUNT(*) as cnt FROM fcm_tokens');
+    fcmTokenCount = rows[0].cnt;
+  } catch {}
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     database: 'Connected',
-    firebase: firebaseApp ? 'Initialized' : 'Not initialized'
+    firebase: firebaseApp ? 'Initialized' : 'Not initialized',
+    fcmTokenCount
   });
 });
 
@@ -94,6 +101,7 @@ const rolesRoutes = require('./routes/roles');
 const auditLogRoutes = require('./routes/auditLogs');
 const vehiclesRoutes = require('./routes/vehicles');
 const reportsRoutes = require('./routes/reports');
+const notificationsRoutes = require('./routes/notifications');
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/billing', billingRoutes);
@@ -106,6 +114,7 @@ app.use('/api/roles', rolesRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/vehicles', vehiclesRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -170,6 +179,13 @@ async function startServer() {
       await runIssueCategoriesMigration(db);
     } catch (migrationError) {
       console.error('Issue categories migration error:', migrationError);
+    }
+
+    // Run FCM tokens migration
+    try {
+      await runFCMTokensMigration();
+    } catch (migrationError) {
+      console.error('FCM tokens migration error:', migrationError);
     }
 
     // Initialize audit log service

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requirePerm } = require('../middleware/auth');
+const { sendNotificationToUsers } = require('./notifications');
 
 // Get all issues (role-based: admin sees all, driver sees own, business owner sees own + their drivers')
 router.get('/', requirePerm('view_issues'), async (req, res) => {
@@ -105,6 +106,34 @@ router.post('/', requirePerm('manage_issues'), async (req, res) => {
       [result.insertId]
     );
 
+    // Send notification to all admins about new issue
+    try {
+      const [admins] = await db.query(
+        `SELECT user_id FROM users WHERE role = 'administrator'`
+      );
+
+      if (admins.length > 0) {
+        const adminIds = admins.map(admin => admin.user_id);
+
+        await sendNotificationToUsers(
+          adminIds,
+          '⚠️ New Issue Report',
+          `${newIssue[0].category_name}: ${description.substring(0, 50)}${description.length > 50 ? '...' : ''}`,
+          {
+            type: 'issue_reported',
+            issueId: result.insertId,
+            reporter: newIssue[0].reporter_name,
+            category: newIssue[0].category_name,
+            action: '/admin/issues'
+          },
+          db
+        );
+        console.log(`✅ Issue report notification sent to ${adminIds.length} administrators`);
+      }
+    } catch (notifError) {
+      console.error('Error sending issue notification:', notifError);
+    }
+
     res.status(201).json(newIssue[0]);
   } catch (error) {
     console.error('Error creating issue:', error);
@@ -152,6 +181,34 @@ router.put('/:issueId/status', requirePerm('manage_issues'), async (req, res) =>
        WHERE i.issue_id = ?`,
       [issueId]
     );
+
+    // Send notification to issue reporter about status update
+    try {
+      const statusMessages = {
+        open: '🔴 Issue opened',
+        in_progress: '🟡 Being investigated',
+        resolved: '✅ Issue resolved',
+        closed: '✓ Issue closed'
+      };
+
+      const statusMessage = statusMessages[status] || `Status: ${status}`;
+
+      await sendNotificationToUsers(
+        [existing[0].reported_by],
+        '📢 Issue Status Update',
+        `${statusMessage} - ${updated[0].category_name}`,
+        {
+          type: 'issue_status_update',
+          issueId: issueId,
+          status: status,
+          action: '/issues'
+        },
+        db
+      );
+      console.log(`✅ Issue status notification sent to reporter (user ${existing[0].reported_by})`);
+    } catch (notifError) {
+      console.error('Error sending issue status notification:', notifError);
+    }
 
     res.json(updated[0]);
   } catch (error) {

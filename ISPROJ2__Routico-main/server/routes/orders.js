@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requirePerm } = require('../middleware/auth');
+const { sendNotificationToUser, sendNotificationToUsers } = require('./notifications');
 
 // Get all orders for the authenticated business owner
 router.get('/', requirePerm('view_orders'), async (req, res) => {
@@ -269,6 +270,62 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
       );
     }
 
+    // Send status update notification to driver and business owner
+    try {
+      const statusMessages = {
+        pending: '⏳ Order pending',
+        assigned: '✅ Order assigned',
+        in_transit: '🚚 Order in transit',
+        delivered: '📦 Order delivered',
+        completed: '✨ Order completed',
+        cancelled: '❌ Order cancelled'
+      };
+
+      const statusMessage = statusMessages[status] || `Status: ${status}`;
+      const notifyUserIds = [];
+
+      // Notify driver if assigned (convert driver_id to user_id)
+      if (orders[0].assigned_driver_id) {
+        const [driverUser] = await db.query(
+          'SELECT user_id FROM drivers WHERE driver_id = ?',
+          [orders[0].assigned_driver_id]
+        );
+        if (driverUser.length > 0) {
+          notifyUserIds.push(driverUser[0].user_id);
+        }
+      }
+
+      // Get business owner user_id to notify them
+      const [ownerUser] = await db.query(
+        `SELECT u.user_id FROM users u
+         JOIN businessowners bo ON u.user_id = bo.user_id
+         WHERE bo.owner_id = ?`,
+        [orders[0].business_owner_id]
+      );
+
+      if (ownerUser.length > 0) {
+        notifyUserIds.push(ownerUser[0].user_id);
+      }
+
+      if (notifyUserIds.length > 0) {
+        await sendNotificationToUsers(
+          notifyUserIds,
+          '📋 Order Status Update',
+          `${statusMessage} - Order #${orderId}`,
+          {
+            type: 'status_update',
+            orderId: String(orderId),
+            status: status,
+            action: '/driver/orders'
+          },
+          db
+        );
+        console.log(`✅ Status update notification sent to ${notifyUserIds.length} users for order ${orderId}`);
+      }
+    } catch (notifError) {
+      console.error('Error sending status update notification:', notifError);
+    }
+
     // Fetch updated order with joins
     const [updatedOrders] = await db.query(
       `SELECT o.*, c.company_name as customer_name, c.contact_number as customer_phone,
@@ -338,6 +395,40 @@ router.put('/:orderId/assign', requirePerm('assign_orders'), async (req, res) =>
         `INSERT INTO deliverystatuslogs (order_id, status) VALUES (?, ?)`,
         [orderId, newStatus]
       );
+    }
+
+    // Send notification to driver if assigned
+    if (driverId && newStatus === 'assigned') {
+      try {
+        // Get driver's user_id
+        const [driverUser] = await db.query(
+          'SELECT user_id FROM drivers WHERE driver_id = ?',
+          [driverId]
+        );
+
+        if (driverUser.length > 0) {
+          const driverUserId = driverUser[0].user_id;
+          const pickupLoc = orderRows[0].pickup_location || 'Unknown location';
+          const dropoffLoc = orderRows[0].drop_off_location || 'Unknown location';
+
+          await sendNotificationToUser(
+            driverUserId,
+            '📦 New Order Assigned',
+            `Order #${orderId} assigned - ${pickupLoc} to ${dropoffLoc}`,
+            {
+              type: 'order_assigned',
+              orderId: orderId,
+              action: '/driver/orders'
+            },
+            db
+          );
+          console.log(`✅ Notification sent to driver user ${driverUserId} (driver_id ${driverId}) for order assignment`);
+        } else {
+          console.warn(`⚠️ No user found for driver ${driverId}`);
+        }
+      } catch (notifError) {
+        console.error('Error sending driver assignment notification:', notifError);
+      }
     }
 
     // Fetch updated order

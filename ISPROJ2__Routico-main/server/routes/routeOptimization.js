@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requirePerm } = require('../middleware/auth');
+const { sendNotificationToUser } = require('./notifications');
 
 // Haversine distance between two lat/lng points (in km)
 function haversine(lat1, lon1, lat2, lon2) {
@@ -390,6 +391,26 @@ router.post('/assign-driver', requirePerm('optimize_routes'), async (req, res) =
     }
 
     const driverName = `${driverResult[0].first_name} ${driverResult[0].last_name}`;
+
+    // Notify the assigned driver
+    try {
+      const [driverUser] = await db.query(
+        'SELECT user_id FROM drivers WHERE driver_id = ?',
+        [driverId]
+      );
+      if (driverUser.length > 0) {
+        await sendNotificationToUser(
+          driverUser[0].user_id,
+          '📦 Route Assigned',
+          `You have been assigned a route with ${orderIds.length} order${orderIds.length > 1 ? 's' : ''}`,
+          { type: 'order_assigned', orderId: String(orderIds[0]), action: '/driver/orders' },
+          db
+        );
+      }
+    } catch (notifError) {
+      console.error('Error sending route assignment notification:', notifError);
+    }
+
     res.json({
       success: true,
       driver_id: driverId,

@@ -145,6 +145,7 @@ export const AuthProvider = ({ children }) => {
           dashboardType: data.user.dashboardType || getDashboardForRole(data.user.role),
           permissions: data.user.permissions || []
         }));
+        localStorage.setItem('authToken', data.token);
 
         return { user: { email } };
       }
@@ -161,6 +162,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       sessionStorage.removeItem('jwtUser');
+      localStorage.removeItem('authToken');
       await signOut(auth);
       setUser(null);
       setUserRole(null);
@@ -195,6 +197,7 @@ export const AuthProvider = ({ children }) => {
       } catch (e) {
         console.error('Error parsing stored JWT user:', e);
         sessionStorage.removeItem('jwtUser');
+        localStorage.removeItem('authToken');
       }
       // Still subscribe to Firebase auth state but don't override JWT session
       const unsubscribe = onAuthStateChanged(auth, () => {});

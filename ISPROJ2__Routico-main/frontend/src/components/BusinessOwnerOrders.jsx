@@ -538,9 +538,15 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
       });
     }
 
-    // Use full address strings for better street-level precision
-    const origin = pickupAddress || new window.google.maps.LatLng(originCoords.lat, originCoords.lng);
-    const destination = dropoffAddress || new window.google.maps.LatLng(destCoords.lat, destCoords.lng);
+    // Use geocoded coordinates when available so the route starts/ends at the
+    // exact same point as the pin — address strings cause the Directions API
+    // to re-geocode independently and may land on a slightly different point.
+    const origin = (originCoords?.lat && originCoords?.lng)
+      ? new window.google.maps.LatLng(originCoords.lat, originCoords.lng)
+      : pickupAddress;
+    const destination = (destCoords?.lat && destCoords?.lng)
+      ? new window.google.maps.LatLng(destCoords.lat, destCoords.lng)
+      : dropoffAddress;
 
     console.log('Getting directions from', origin, 'to', destination);
 
@@ -678,11 +684,11 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
       return;
     }
     if (!formData.pickupAddress) {
-      toast.error('Please complete the pickup address (select at least region, province, and city).');
+      toast.error('Please enter a valid street name for the pickup address.');
       return;
     }
     if (!formData.dropoffAddress) {
-      toast.error('Please complete the dropoff address (select at least region, province, and city).');
+      toast.error('Please enter a valid street name for the dropoff address.');
       return;
     }
     if (!formData.pickupLocation || !formData.pickupLocation.lat) {
@@ -850,6 +856,10 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         if (!dropoffLatLng && selectedOrder.drop_off_location) {
           dropoffLatLng = await geocode(selectedOrder.drop_off_location);
         }
+        // Store geocoded coords so the traffic refresh effect uses the same
+        // coordinates as the pins, not a fresh text-address re-geocode
+        window.orderDetailPickupLatLng = pickupLatLng;
+        window.orderDetailDropoffLatLng = dropoffLatLng;
         // Clear old map
         orderDetailMapRef.current.innerHTML = '';
         if (!pickupLatLng || !dropoffLatLng) return;
@@ -930,8 +940,8 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
       if (!window.google || !window.google.maps) return;
       const ds = new window.google.maps.DirectionsService();
       ds.route({
-        origin: selectedOrder.pickup_location,
-        destination: selectedOrder.drop_off_location,
+        origin: window.orderDetailPickupLatLng || selectedOrder.pickup_location,
+        destination: window.orderDetailDropoffLatLng || selectedOrder.drop_off_location,
         travelMode: window.google.maps.TravelMode.DRIVING,
         drivingOptions: { departureTime: new Date(), trafficModel: 'bestguess' },
         provideRouteAlternatives: true,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import philippineLocations from '../data/philippineLocations';
 import philippineBarangays from '../data/philippineBarangays';
 import { getStreetsForCity } from '../data/philippineStreets';
@@ -10,6 +10,8 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
   const [barangay, setBarangay] = useState('');
   const [street, setStreet] = useState('');
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [streetError, setStreetError] = useState('');
+  const [streetGeocodeFailed, setStreetGeocodeFailed] = useState(false);
   const geocodeTimeoutRef = useRef(null);
   const barangayLocationRef = useRef(null); // Store barangay-level coords for biasing
 
@@ -41,6 +43,7 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
 
   useEffect(() => {
     setStreet('');
+    setStreetGeocodeFailed(false);
   }, [barangay]);
 
   // Build full address and notify parent whenever selections change
@@ -58,17 +61,20 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
 
     const fullAddress = parts.filter(Boolean).join(', ');
 
-    // Only update if we have at least city selected and street is valid
-    if (city && (!street.trim() || streetRegex.test(street.trim()))) {
+    // Only update if we have at least city selected, street chars are valid, and geocoding succeeded
+    if (city && (!street.trim() || streetRegex.test(street.trim())) && !streetGeocodeFailed) {
       onChange(fullAddress);
     } else if (city && street.trim() && !streetRegex.test(street.trim())) {
       // Invalid street characters — clear the address so form can't submit
+      onChange('');
+    } else if (streetGeocodeFailed) {
+      // Street typed but geocoding returned no results — block submission
       onChange('');
     } else {
       onChange('');
       onLocationResolved(null);
     }
-  }, [region, province, city, barangay, street]);
+  }, [region, province, city, barangay, street, streetGeocodeFailed]);
 
   // When barangay changes, geocode barangay-level location as reference point
   useEffect(() => {
@@ -97,30 +103,44 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
     });
   }, [region, province, city, barangay]);
 
-  // When street changes, geocode full address biased toward barangay location
+  // When street changes, validate then geocode for coordinates
   useEffect(() => {
     if (!city) return;
-    if (geocodeTimeoutRef.current) {
-      clearTimeout(geocodeTimeoutRef.current);
-    }
+    if (geocodeTimeoutRef.current) clearTimeout(geocodeTimeoutRef.current);
 
     geocodeTimeoutRef.current = setTimeout(() => {
       if (!window.google || !window.google.maps) return;
 
-      // If no street, use barangay-level location
+      // No street typed — fall back to barangay-level location
       if (!street.trim()) {
-        if (barangayLocationRef.current) {
-          onLocationResolved(barangayLocationRef.current);
-        }
+        if (barangayLocationRef.current) onLocationResolved(barangayLocationRef.current);
         return;
       }
 
+      const typed = street.trim().toLowerCase();
+
+      // Step 1: Check local philippineStreets data as a fast-path ALLOW list.
+      // A match means we skip the geocoding quality check (we already know it's real).
+      // No match does NOT mean invalid — the street may exist but not be in our data,
+      // so we still fall through to geocoding for the final verdict.
+      let localConfirmed = false;
+      if (streetOptions.length > 0) {
+        localConfirmed = streetOptions.some(s => {
+          const sLower = s.toLowerCase();
+          return sLower.startsWith(typed) || sLower.includes(typed) || (typed.includes(sLower) && sLower.length > 3);
+        });
+        if (localConfirmed) {
+          setStreetError('');
+          setStreetGeocodeFailed(false);
+        }
+      }
+
+      // Step 2: Geocode for coordinates.
+      // Also validates quality when not locally confirmed — gibberish returns APPROXIMATE
+      // which we reject; a real street returns ROOFTOP or RANGE_INTERPOLATED.
       setIsGeocoding(true);
       const geocoder = new window.google.maps.Geocoder();
-
-      // Build address for geocoding — use street + city (skip barangay to let Google find the actual street location)
-      const parts = [street.trim()];
-      parts.push(city);
+      const parts = [street.trim(), city];
       if (province) parts.push(province);
       parts.push('Philippines');
 
@@ -130,7 +150,6 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
         componentRestrictions: { country: 'PH' }
       };
 
-      // Bias results toward the barangay area so the geocoder doesn't jump elsewhere
       if (barangayLocationRef.current) {
         const ref = barangayLocationRef.current;
         request.bounds = new window.google.maps.LatLngBounds(
@@ -141,25 +160,55 @@ const CascadingAddressSelector = ({ label, value, onChange, onLocationResolved, 
 
       geocoder.geocode(request, (results, status) => {
         setIsGeocoding(false);
+
         if (status === 'OK' && results[0]) {
           const loc = results[0].geometry.location;
-          const resolved = { lat: loc.lat(), lng: loc.lng() };
-          setStreetError('');
-          onLocationResolved(resolved);
-        } else if (barangayLocationRef.current) {
-          // Geocode completely failed — use barangay location as fallback
-          setStreetError('');
-          onLocationResolved(barangayLocationRef.current);
+
+          if (localConfirmed) {
+            // Local data confirmed — use coordinates directly, no quality check needed
+            onLocationResolved({ lat: loc.lat(), lng: loc.lng() });
+          } else {
+            // Not in local data — validate via geocoding result quality.
+            // Google often returns APPROXIMATE city/barangay fallbacks for gibberish;
+            // ROOFTOP and RANGE_INTERPOLATED mean a real street was actually found.
+            const locationType = results[0].geometry.location_type;
+            const resultTypes = results[0].types || [];
+            const isStreetLevel =
+              locationType === 'ROOFTOP' ||
+              locationType === 'RANGE_INTERPOLATED' ||
+              resultTypes.includes('street_address') ||
+              resultTypes.includes('route');
+
+            if (isStreetLevel) {
+              setStreetError('');
+              setStreetGeocodeFailed(false);
+              onLocationResolved({ lat: loc.lat(), lng: loc.lng() });
+            } else {
+              setStreetGeocodeFailed(true);
+              setStreetError('Street not found. Please enter a valid street name.');
+              onLocationResolved(null);
+            }
+          }
+        } else {
+          // Geocoding API returned nothing
+          if (localConfirmed) {
+            // Local data confirmed validity — fall back to barangay-level coordinates
+            if (barangayLocationRef.current) onLocationResolved(barangayLocationRef.current);
+          } else {
+            setStreetGeocodeFailed(true);
+            setStreetError('Street not found. Please enter a valid street name.');
+            onLocationResolved(null);
+          }
         }
       });
     }, 500);
-  }, [street, barangay, city, province, region]);
+  }, [street, barangay, city, province, region, streetOptions]);
 
-  const [streetError, setStreetError] = useState('');
   const streetRegex = /^[a-zA-Z0-9\s.,#\-\/]+$/;
 
   const handleStreetChange = (val) => {
     setStreet(val);
+    setStreetGeocodeFailed(false); // reset on every keystroke so user can re-attempt
     if (val.trim() && !streetRegex.test(val.trim())) {
       setStreetError('Street name contains invalid characters. Use only letters, numbers, spaces, and common punctuation.');
     } else {

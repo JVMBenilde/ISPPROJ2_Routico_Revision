@@ -28,6 +28,7 @@ const AdministratorDashboard = () => {
   });
 
   const [pendingUsers, setPendingUsers] = useState([]);
+  const [adminNotifications, setAdminNotifications] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,6 +47,27 @@ const AdministratorDashboard = () => {
   useEffect(() => {
     fetchDashboardData();
   }, [activeTab]);
+
+  // Poll for new issue notifications every 15 seconds
+  useEffect(() => {
+    if (!user) return;
+    const fetchIssueNotifications = async () => {
+      try {
+        const token = getToken();
+        if (!token) return;
+        const res = await fetch('http://localhost:3001/api/notifications', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAdminNotifications(data.filter(n => n.type === 'issue_reported'));
+        }
+      } catch {}
+    };
+    fetchIssueNotifications();
+    const interval = setInterval(fetchIssueNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -78,6 +100,15 @@ const AdministratorDashboard = () => {
         setPendingUsers(pendingData);
       } else {
         setPendingUsers([]);
+      }
+
+      // Fetch issue report notifications for admin bell
+      const notifResponse = await fetch('http://localhost:3001/api/notifications', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (notifResponse.ok) {
+        const notifData = await notifResponse.json();
+        setAdminNotifications(notifData.filter(n => n.type === 'issue_reported'));
       }
 
       // Fetch recent audit logs for activity timeline
@@ -513,9 +544,9 @@ const AdministratorDashboard = () => {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                {stats.pendingApprovals > 0 && (
+                {(stats.pendingApprovals + adminNotifications.filter(n => !n.is_read).length) > 0 && (
                   <span className="absolute top-1 right-1 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 rounded-full text-[10px] font-bold text-white px-1">
-                    {stats.pendingApprovals}
+                    {stats.pendingApprovals + adminNotifications.filter(n => !n.is_read).length}
                   </span>
                 )}
               </button>
@@ -525,31 +556,65 @@ const AdministratorDashboard = () => {
                     <h3 className="text-sm font-semibold text-white">Notifications</h3>
                   </div>
                   <div className="max-h-64 overflow-y-auto">
-                    {pendingUsers.length > 0 ? (
-                      pendingUsers.slice(0, 5).map((pu) => (
-                        <button
-                          key={pu.user_id}
-                          onClick={() => { setActiveTab('overview'); setShowNotifications(false); }}
-                          className="w-full text-left px-4 py-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0"
-                        >
-                          <p className="text-sm text-white font-medium">{pu.company_name || pu.email}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">Pending registration approval</p>
-                        </button>
-                      ))
-                    ) : (
+                    {pendingUsers.length === 0 && adminNotifications.length === 0 ? (
                       <div className="px-4 py-6 text-center text-sm text-slate-500">
                         No new notifications
                       </div>
+                    ) : (
+                      <>
+                        {pendingUsers.slice(0, 5).map((pu) => (
+                          <button
+                            key={pu.user_id}
+                            onClick={() => { setActiveTab('overview'); setShowNotifications(false); }}
+                            className="w-full text-left px-4 py-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50"
+                          >
+                            <p className="text-sm text-white font-medium">{pu.company_name || pu.email}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Pending registration approval</p>
+                          </button>
+                        ))}
+                        {adminNotifications.slice(0, 5).map((n) => (
+                          <button
+                            key={n.notification_id}
+                            onClick={() => { setActiveTab('issues'); setShowNotifications(false); }}
+                            className={`w-full text-left px-4 py-3 hover:bg-slate-700/50 transition-colors border-b border-slate-700/50 last:border-0 ${!n.is_read ? 'border-l-2 border-l-blue-500' : ''}`}
+                          >
+                            <p className="text-sm text-white font-medium">{n.title}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{n.message}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{new Date(n.created_at).toLocaleTimeString()}</p>
+                          </button>
+                        ))}
+                      </>
                     )}
                   </div>
-                  {pendingUsers.length > 0 && (
-                    <div className="p-3 border-t border-slate-700">
-                      <button
-                        onClick={() => { setActiveTab('overview'); setShowNotifications(false); }}
-                        className="w-full text-center text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
-                      >
-                        View all pending approvals
-                      </button>
+                  {(pendingUsers.length > 0 || adminNotifications.length > 0) && (
+                    <div className="p-3 border-t border-slate-700 flex gap-2">
+                      {pendingUsers.length > 0 && (
+                        <button
+                          onClick={() => { setActiveTab('overview'); setShowNotifications(false); }}
+                          className="flex-1 text-center text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          View pending approvals
+                        </button>
+                      )}
+                      {adminNotifications.length > 0 && (
+                        <button
+                          onClick={async () => {
+                            setActiveTab('issues');
+                            setShowNotifications(false);
+                            const token = getToken();
+                            if (token) {
+                              await fetch('http://localhost:3001/api/notifications/mark-read', {
+                                method: 'PUT',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                              });
+                              setAdminNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+                            }
+                          }}
+                          className="flex-1 text-center text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          View issues
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

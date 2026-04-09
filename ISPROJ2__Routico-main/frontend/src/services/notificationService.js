@@ -10,24 +10,35 @@ const getFirebaseMessaging = () => {
   }
 };
 
-const STORAGE_KEY = 'routico_notifications';
+const BASE_STORAGE_KEY = 'routico_notifications';
 
 class NotificationService {
   constructor() {
     this.listeners = [];
   }
 
+  // Returns a user-specific storage key so notifications are isolated
+  // per user even when multiple accounts are open in the same browser.
+  _storageKey() {
+    try {
+      const jwtUser = JSON.parse(sessionStorage.getItem('jwtUser'));
+      if (jwtUser?.userId) return `${BASE_STORAGE_KEY}_${jwtUser.userId}`;
+    } catch {}
+    return BASE_STORAGE_KEY;
+  }
+
   saveToStorage(notification) {
     try {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const key = this._storageKey();
+      const stored = JSON.parse(localStorage.getItem(key) || '[]');
       stored.unshift({ ...notification, read: false });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stored.slice(0, 50)));
+      localStorage.setItem(key, JSON.stringify(stored.slice(0, 50)));
     } catch {}
   }
 
   loadFromStorage() {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      return JSON.parse(localStorage.getItem(this._storageKey()) || '[]');
     } catch {
       return [];
     }
@@ -35,9 +46,10 @@ class NotificationService {
 
   markAllAsRead() {
     try {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const key = this._storageKey();
+      const stored = JSON.parse(localStorage.getItem(key) || '[]');
       const updated = stored.map(n => ({ ...n, read: true }));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem(key, JSON.stringify(updated));
       return updated;
     } catch {
       return [];
@@ -45,7 +57,7 @@ class NotificationService {
   }
 
   clearStorage() {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(this._storageKey());
   }
 
   // Request permission and get FCM token
@@ -84,9 +96,17 @@ class NotificationService {
         return null;
       }
 
-      const token = await getToken(messaging, {
-        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
-      });
+      // Pass the SW registration explicitly to avoid a race condition where
+      // getToken fires before the service worker has activated on first load.
+      let swRegistration;
+      try {
+        swRegistration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+      } catch { /* fallback: let Firebase discover SW automatically */ }
+
+      const tokenOptions = { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY };
+      if (swRegistration) tokenOptions.serviceWorkerRegistration = swRegistration;
+
+      const token = await getToken(messaging, tokenOptions);
 
       if (token) {
         console.log('✅ FCM Token obtained:', token.substring(0, 20) + '...');

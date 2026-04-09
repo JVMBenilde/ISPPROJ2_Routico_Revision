@@ -11,7 +11,7 @@ const Header = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [notifications, setNotifications] = useState(() => notificationService.loadFromStorage());
+  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     const savedLogo = localStorage.getItem('companyLogo');
@@ -42,65 +42,80 @@ const Header = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Initialize notifications and request FCM permission
+  // Poll DB for notifications every 15s — user-specific, no FCM dependency
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchNotifications = async () => {
+      try {
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) return;
+        const res = await fetch('http://localhost:3001/api/notifications', {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          console.log('📬 Notifications fetched:', data);
+          setNotifications(data);
+        } else {
+          console.error('❌ Failed to fetch notifications:', res.status);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching notifications:', error);
+      }
+    };
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Register FCM token and listen for foreground/background messages for instant updates
   useEffect(() => {
     if (!user) return;
 
     let unsubscribe = () => {};
 
-    const initializeNotifications = async () => {
+    const initFCM = async () => {
       try {
-        console.log('📱 Initializing notifications...');
-
-        // Request permission and register for push notifications
-        const token = await notificationService.requestPermission();
-        if (token) {
-          console.log('✅ Push notifications enabled');
-        } else {
-          console.log('⚠️ Notifications not enabled');
+        await notificationService.requestPermission();
+        if (Notification.permission === 'granted') {
+          const token = await notificationService.getFCMToken();
+          if (token) console.log('✅ Push notifications registered');
         }
 
-        // Listen for foreground messages
-        unsubscribe = notificationService.onNotification((payload) => {
-          console.log('📬 New notification:', payload);
-          const notification = {
-            title: payload.notification?.title || 'Routico Notification',
-            message: payload.notification?.body || 'You have a new message',
-            time: new Date().toLocaleTimeString(),
-            type: payload.data?.type || 'info',
-            data: payload.data
-          };
-          notificationService.saveToStorage(notification);
-          setNotifications(notificationService.loadFromStorage());
-        });
-
-        // Listen for messages relayed from the service worker (background FCM)
-        const swMessageHandler = (event) => {
-          console.log('📨 SW message received:', event.data);
-          if (event.data?.type === 'FCM_BACKGROUND_MESSAGE') {
-            const payload = event.data.payload;
-            const notification = {
-              title: payload.notification?.title || 'Routico Notification',
-              message: payload.notification?.body || 'You have a new message',
-              time: new Date().toLocaleTimeString(),
-              type: payload.data?.type || 'info',
-              data: payload.data
-            };
-            notificationService.saveToStorage(notification);
-            setNotifications(notificationService.loadFromStorage());
+        // Re-fetch from DB immediately when a foreground FCM message arrives
+        const refetch = async () => {
+          try {
+            const authToken = localStorage.getItem('authToken');
+            if (!authToken) return;
+            const res = await fetch('http://localhost:3001/api/notifications', {
+              headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              console.log('📬 Notifications refetched (FCM):', data);
+              setNotifications(data);
+            }
+          } catch (error) {
+            console.error('❌ Error refetching notifications:', error);
           }
         };
+
+        unsubscribe = notificationService.onNotification(refetch);
+
+        const swMessageHandler = (event) => {
+          if (event.data?.type === 'FCM_BACKGROUND_MESSAGE') refetch();
+        };
         navigator.serviceWorker?.addEventListener('message', swMessageHandler);
-        const removeSWListener = () => navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
-        const origUnsub = unsubscribe;
-        unsubscribe = () => { origUnsub(); removeSWListener(); };
+        const orig = unsubscribe;
+        unsubscribe = () => { orig(); navigator.serviceWorker?.removeEventListener('message', swMessageHandler); };
       } catch (error) {
-        console.error('📱 Error initializing notifications:', error);
+        console.error('📱 Error initializing FCM:', error);
       }
     };
 
-    initializeNotifications();
-
+    initFCM();
     return () => unsubscribe();
   }, [user]);
 
@@ -199,12 +214,19 @@ const Header = () => {
             {/* Notification Bell */}
             <div className="relative" data-header-dropdown>
               <button
-                onClick={() => {
+                onClick={async () => {
                   const opening = !showNotifications;
                   setShowNotifications(opening);
-                  if (opening) {
-                    const updated = notificationService.markAllAsRead();
-                    setNotifications(updated);
+                  if (opening && notifications.some(n => !n.is_read)) {
+                    // Mark all as read in DB
+                    const authToken = localStorage.getItem('authToken');
+                    if (authToken) {
+                      await fetch('http://localhost:3001/api/notifications/mark-read', {
+                        method: 'PUT',
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                      });
+                      setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+                    }
                   }
                 }}
                 className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800/50 transition-colors"
@@ -213,7 +235,7 @@ const Header = () => {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                {notifications.some(n => !n.read) && (
+                {notifications.some(n => !n.is_read) && (
                   <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full"></span>
                 )}
               </button>
@@ -230,18 +252,24 @@ const Header = () => {
                         <p>No notifications yet</p>
                       </div>
                     ) : (
-                      notifications.map((notif, idx) => (
+                      notifications.map((notif) => (
                         <div
-                          key={idx}
+                          key={notif.notification_id}
                           onClick={() => {
                             setShowNotifications(false);
-                            if (notif.data?.action) navigate(notif.data.action);
+                            const action = notif.data?.action;
+                            if (action) {
+                              console.log('🔗 Navigating to:', action);
+                              navigate(action);
+                            }
                           }}
-                          className={`p-4 border-b border-gray-700/50 hover:bg-gray-800/30 cursor-pointer transition-colors ${!notif.read ? 'border-l-2 border-l-blue-500' : ''}`}
+                          className={`p-4 border-b border-gray-700/50 hover:bg-gray-800/30 cursor-pointer transition-colors ${!notif.is_read ? 'border-l-2 border-l-blue-500' : ''}`}
                         >
-                          {notif.title && <p className="text-sm font-semibold text-white">{notif.title}</p>}
+                          <p className="text-sm font-semibold text-white">{notif.title}</p>
                           <p className="text-sm text-gray-300">{notif.message}</p>
-                          <p className="text-xs text-gray-500 mt-1">{notif.time}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(notif.created_at).toLocaleTimeString()}
+                          </p>
                         </div>
                       ))
                     )}

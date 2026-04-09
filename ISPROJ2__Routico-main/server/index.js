@@ -18,6 +18,8 @@ const { runMechanicsMigration } = require('./migrations/005_mechanics');
 const { runPartnerShopsMigration } = require('./migrations/006_partner_shops');
 const { runIssueCategoriesMigration } = require('./migrations/007_issue_categories');
 const { runFCMTokensMigration } = require('./migrations/008_fcm_tokens');
+const { runNotificationsMigration } = require('./migrations/009_notifications');
+const { updateNotificationsTableMigration } = require('./migrations/010_update_notifications_table');
 const AuditLogService = require('./services/auditLogService');
 const path = require('path');
 
@@ -186,6 +188,20 @@ async function startServer() {
       await runFCMTokensMigration();
     } catch (migrationError) {
       console.error('FCM tokens migration error:', migrationError);
+    }
+
+    // Run notifications table migration
+    try {
+      await runNotificationsMigration(db);
+    } catch (migrationError) {
+      console.error('Notifications migration error:', migrationError);
+    }
+
+    // Run update notifications table migration
+    try {
+      await updateNotificationsTableMigration(db);
+    } catch (migrationError) {
+      console.error('Update notifications table migration error:', migrationError);
     }
 
     // Initialize audit log service

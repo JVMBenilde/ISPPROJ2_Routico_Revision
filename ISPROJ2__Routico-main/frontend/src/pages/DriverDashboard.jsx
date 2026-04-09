@@ -5,12 +5,17 @@ import DriverIssues from '../components/DriverIssues';
 import DriverSettings from '../components/DriverSettings';
 import BusinessOwnerCharts from '../components/BusinessOwnerCharts';
 import Header from '../components/Header';
+import notificationService from '../services/notificationService';
 
 const DriverDashboard = () => {
   const { user, getToken, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState('orders');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [driverProfile, setDriverProfile] = useState(null);
+  const [notifPermission, setNotifPermission] = useState(() =>
+    'Notification' in window ? Notification.permission : 'granted'
+  );
+  const [tokenMissing, setTokenMissing] = useState(!localStorage.getItem('fcmToken'));
 
   useEffect(() => {
     fetchDriverProfile();
@@ -215,6 +220,35 @@ const DriverDashboard = () => {
           <span className="ml-3 text-white font-semibold">Routico</span>
         </div>
         <Header />
+        {/* Notification permission banner */}
+        {(notifPermission !== 'granted' || tokenMissing) && (
+          <div className="mx-6 mt-4 flex items-center justify-between gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-3">
+              <svg className="w-5 h-5 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <p className="text-sm text-yellow-300">
+                {notifPermission === 'denied'
+                  ? 'Notifications are blocked. Enable them in your browser site settings then reload.'
+                  : notifPermission !== 'granted'
+                  ? 'Enable notifications to get instant alerts when orders are assigned to you.'
+                  : 'Your device is not registered for push notifications. Tap to register.'}
+              </p>
+            </div>
+            {notifPermission !== 'denied' && (
+              <button
+                onClick={async () => {
+                  const token = await notificationService.requestPermission() || await notificationService.getFCMToken();
+                  setNotifPermission(Notification.permission);
+                  if (token) setTokenMissing(false);
+                }}
+                className="flex-shrink-0 text-xs font-medium bg-yellow-500 hover:bg-yellow-400 text-black px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {notifPermission === 'granted' ? 'Register Device' : 'Enable'}
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">
           <div className="p-6 lg:p-8">
             {/* Page Title */}

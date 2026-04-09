@@ -3,6 +3,47 @@ const router = express.Router();
 const { requirePerm } = require('../middleware/auth');
 const { sendNotificationToUser, sendNotificationToUsers } = require('./notifications');
 
+async function sendSmsToUsersByUserIds(req, userIds, message, contextTag = 'orders') {
+  const db = req.app.locals.db;
+  const smsService = req.app.locals.sms;
+
+  if (!smsService) {
+    console.log(`[Order SMS] Skipped (${contextTag}): SMS service not initialized`);
+    return;
+  }
+
+  const uniqueUserIds = [...new Set((userIds || []).filter(Boolean))];
+  if (uniqueUserIds.length === 0) {
+    console.log(`[Order SMS] Skipped (${contextTag}): no recipients`);
+    return;
+  }
+
+  const [users] = await db.query(
+    'SELECT user_id, phone FROM users WHERE user_id IN (?)',
+    [uniqueUserIds]
+  );
+
+  if (users.length === 0) {
+    console.log(`[Order SMS] Skipped (${contextTag}): recipients have no user rows`);
+    return;
+  }
+
+  const tasks = users.map(async (user) => {
+    if (!user.phone) {
+      console.log(`[Order SMS] Skipped (${contextTag}): user ${user.user_id} has no phone`);
+      return;
+    }
+
+    try {
+      await smsService.send(user.phone, message);
+    } catch (error) {
+      console.error(`[Order SMS] Error (${contextTag}) for user ${user.user_id}:`, error.message || error);
+    }
+  });
+
+  await Promise.all(tasks);
+}
+
 // Get all orders for the authenticated business owner
 router.get('/', requirePerm('view_orders'), async (req, res) => {
   try {
@@ -320,6 +361,12 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
           },
           db
         );
+        await sendSmsToUsersByUserIds(
+          req,
+          notifyUserIds,
+          `Routico: ${statusMessage} - Order #${orderId}`,
+          'status_update_owner_driver'
+        );
         console.log(`✅ Status update notification sent to ${notifyUserIds.length} users for order ${orderId}`);
       }
     } catch (notifError) {
@@ -337,8 +384,6 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
       [orderId]
     );
 
-<<<<<<< Updated upstream
-=======
     // SMS to customer on relevant status changes
     const smsStatuses = ['in_transit', 'delayed', 'delivered', 'completed'];
     const smsMessages = {
@@ -354,9 +399,9 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
       ).catch(err => console.error('SMS error:', err));
     } else if (smsStatuses.includes(status) && !updatedOrders[0]?.customer_phone) {
       console.log(`[Order SMS] Skipped for order #${orderId}: customer phone is missing`);
+    } else if (smsStatuses.includes(status) && !req.app.locals.sms) {
+      console.log(`[Order SMS] Skipped for order #${orderId}: SMS service not initialized`);
     }
-
->>>>>>> Stashed changes
     res.json(updatedOrders[0]);
   } catch (error) {
     console.error('Error updating order status:', error);
@@ -430,6 +475,7 @@ router.put('/:orderId/assign', requirePerm('assign_orders'), async (req, res) =>
           const driverUserId = driverUser[0].user_id;
           const pickupLoc = orderRows[0].pickup_location || 'Unknown location';
           const dropoffLoc = orderRows[0].drop_off_location || 'Unknown location';
+          const assignmentMessage = `Routico: Order #${orderId} assigned - ${pickupLoc} to ${dropoffLoc}`;
 
           await sendNotificationToUser(
             driverUserId,
@@ -441,6 +487,13 @@ router.put('/:orderId/assign', requirePerm('assign_orders'), async (req, res) =>
               action: '/driver/orders'
             },
             db
+          );
+
+          await sendSmsToUsersByUserIds(
+            req,
+            [driverUserId, userId],
+            assignmentMessage,
+            'assignment_owner_driver'
           );
           console.log(`✅ Notification sent to driver user ${driverUserId} (driver_id ${driverId}) for order assignment`);
         } else {

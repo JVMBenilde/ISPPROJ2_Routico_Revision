@@ -17,17 +17,11 @@ const { runNameFieldsMigration } = require('./migrations/004_separate_name_field
 const { runMechanicsMigration } = require('./migrations/005_mechanics');
 const { runPartnerShopsMigration } = require('./migrations/006_partner_shops');
 const { runIssueCategoriesMigration } = require('./migrations/007_issue_categories');
-<<<<<<< Updated upstream
 const { runFCMTokensMigration } = require('./migrations/008_fcm_tokens');
 const { runNotificationsMigration } = require('./migrations/009_notifications');
 const { updateNotificationsTableMigration } = require('./migrations/010_update_notifications_table');
-=======
-const { runNotificationsTrackingMigration } = require('./migrations/008_notifications_tracking');
-const { runNotificationDeviceTokensMigration } = require('./migrations/007_notification_device_tokens');
-const NotificationService = require('./services/notificationService');
-const SMSService = require('./services/smsService');
->>>>>>> Stashed changes
 const AuditLogService = require('./services/auditLogService');
+const SMSService = require('./services/smsService');
 const path = require('path');
 
 const app = express();
@@ -69,6 +63,7 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY && process.env.FIREBASE_SERVICE_ACC
 // Make database and file storage available globally for routes
 app.locals.db = db;
 app.locals.fileStorage = fileStorageService;
+app.locals.sms = new SMSService();
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

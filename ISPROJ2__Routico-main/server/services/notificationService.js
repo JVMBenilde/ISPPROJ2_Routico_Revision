@@ -162,7 +162,10 @@ class NotificationService {
 
     for (const user of users) {
       const phone = this.normalizePhone(user.phone);
-      if (!phone) continue;
+      if (!phone) {
+        console.log(`[Notify SMS] Skipped for user ${user.user_id}: invalid or missing phone`);
+        continue;
+      }
 
       try {
         const response = await this.vonageClient.sms.send({
@@ -179,6 +182,7 @@ class NotificationService {
         }
 
         sent += 1;
+        console.log(`[Notify SMS Sent] user=${user.user_id} to=${phone} id=${msg['message-id']} status=${msg.status}`);
       } catch (error) {
         failed += 1;
         const details = error.message || String(error);

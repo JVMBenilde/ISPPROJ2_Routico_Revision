@@ -337,6 +337,26 @@ router.put('/:orderId/status', requirePerm('update_order_status'), async (req, r
       [orderId]
     );
 
+<<<<<<< Updated upstream
+=======
+    // SMS to customer on relevant status changes
+    const smsStatuses = ['in_transit', 'delayed', 'delivered', 'completed'];
+    const smsMessages = {
+      in_transit: `Routico: Your order #${orderId} is now in transit and on its way!`,
+      delayed: `Routico: Your order #${orderId} has been delayed. We apologize for the inconvenience.`,
+      delivered: `Routico: Your order #${orderId} has been delivered. Thank you!`,
+      completed: `Routico: Your order #${orderId} has been completed. Thank you!`
+    };
+    if (smsStatuses.includes(status) && req.app.locals.sms && updatedOrders[0]?.customer_phone) {
+      req.app.locals.sms.send(
+        updatedOrders[0].customer_phone,
+        smsMessages[status]
+      ).catch(err => console.error('SMS error:', err));
+    } else if (smsStatuses.includes(status) && !updatedOrders[0]?.customer_phone) {
+      console.log(`[Order SMS] Skipped for order #${orderId}: customer phone is missing`);
+    }
+
+>>>>>>> Stashed changes
     res.json(updatedOrders[0]);
   } catch (error) {
     console.error('Error updating order status:', error);

@@ -98,7 +98,8 @@ const BusinessOwnerOrders = ({ routeOptimizationOnly = false }) => {
         setSelectedOrder(updated);
         toast.success(driverId ? 'Driver assigned successfully' : 'Driver unassigned');
       } else {
-        toast.error('Failed to assign driver');
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to assign driver');
       }
     } catch (err) {
       toast.error('Failed to assign driver');

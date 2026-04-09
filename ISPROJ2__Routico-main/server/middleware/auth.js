@@ -113,6 +113,21 @@ const requirePermission = (permissionKey) => {
 
       const userData = result[0];
 
+      // Backfill missing role_id defensively for legacy rows.
+      if (!userData.role_id && userData.role) {
+        const [roleRows] = await db.query(
+          'SELECT role_id FROM roles WHERE role_name = ? LIMIT 1',
+          [userData.role]
+        );
+        if (roleRows.length > 0) {
+          userData.role_id = roleRows[0].role_id;
+          await db.query('UPDATE users SET role_id = ? WHERE user_id = ? AND role_id IS NULL', [
+            userData.role_id,
+            userData.user_id
+          ]);
+        }
+      }
+
       // Business owner status checks
       if (userData.role === 'business_owner') {
         if (userData.account_status !== 'approved') {
@@ -123,8 +138,29 @@ const requirePermission = (permissionKey) => {
         }
       }
 
-      // Check permission from cache
-      if (!permissionCache || !permissionCache.hasPermission(userData.role_id, permissionKey)) {
+      if (!userData.role_id) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      // Check permission from cache first, then fall back to DB for resilience.
+      let hasPermission = false;
+      if (permissionCache) {
+        hasPermission = permissionCache.hasPermission(userData.role_id, permissionKey);
+      }
+
+      if (!hasPermission) {
+        const [permRows] = await db.query(
+          `SELECT 1
+           FROM role_permissions rp
+           JOIN permissions p ON rp.permission_id = p.permission_id
+           WHERE rp.role_id = ? AND p.permission_key = ?
+           LIMIT 1`,
+          [userData.role_id, permissionKey]
+        );
+        hasPermission = permRows.length > 0;
+      }
+
+      if (!hasPermission) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
 
